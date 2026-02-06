@@ -1,7 +1,9 @@
+
 {
   "name": "ArtFlow: AI Art Marketplace",
   "description": "An intelligent art discovery and marketplace platform using AI to decode taste, color, and emotional response.",
   "requestFramePermissions": [
-    "camera"
+    "camera",
+    "microphone"
   ]
 }

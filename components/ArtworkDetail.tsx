@@ -4,6 +4,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Artwork } from '../types';
 import { RoomVisualizer } from './RoomVisualizer';
+import { CheckoutModal } from './CheckoutModal';
 import { learningLoops } from '../services/learningLoops';
 import { geminiService } from '../services/geminiService';
 import toast from 'react-hot-toast';
@@ -12,12 +13,14 @@ import {
   Zap, Palette, Activity, ShieldCheck, Calendar, 
   MapPin, User, ChevronRight, Info, Award, History, Loader2
 } from 'lucide-react';
+import { Box, Flex, Text, Button } from '../flow';
 
 const ArtworkDetail: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [artwork, setArtwork] = useState<Artwork | null>(null);
   const [showVisualizer, setShowVisualizer] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
   const [harmony, setHarmony] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -27,11 +30,11 @@ const ArtworkDetail: React.FC = () => {
   useEffect(() => {
     const fetchArt = async () => {
       setLoading(true);
-      const { data, error } = await supabase
+      const { data, error } = await (supabase
         .from('artworks')
         .select('*')
         .eq('id', id)
-        .single();
+        .single() as any);
 
       if (error || !data) {
         toast.error('Asset identity not found');
@@ -59,7 +62,13 @@ const ArtworkDetail: React.FC = () => {
       entityId: artwork.id,
       timestamp: new Date().toISOString()
     });
-    toast.success(`Signal Synchronised: ${type.toUpperCase()}`);
+    if (type !== 'purchase') toast.success(`Signal Synchronised: ${type.toUpperCase()}`);
+  };
+
+  const handleAcquisitionSuccess = (ref: string) => {
+    setShowCheckout(false);
+    // Move to Vault view
+    navigate('/vault', { state: { newAsset: artwork?.id, paymentRef: ref } });
   };
 
   if (loading || !artwork) return (
@@ -77,8 +86,17 @@ const ArtworkDetail: React.FC = () => {
         <RoomVisualizer artwork={artwork} onClose={() => setShowVisualizer(false)} />
       )}
 
+      {showCheckout && user && (
+        <CheckoutModal 
+          artwork={artwork} 
+          user={user} 
+          onClose={() => setShowCheckout(false)} 
+          onSuccess={handleAcquisitionSuccess}
+        />
+      )}
+
       {/* Breadcrumb Header */}
-      <div className="max-w-7xl mx-auto px-6 pt-32 pb-8 border-b border-gray-50 mb-12 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-6 pt-32 pb-8 border-b border-gray-100 mb-12 flex items-center justify-between">
         <nav className="flex items-center gap-6">
           <button onClick={() => navigate(-1)} className="group flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-black transition-colors">
             <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> Back
@@ -186,9 +204,15 @@ const ArtworkDetail: React.FC = () => {
                        <span className="text-5xl font-mono font-bold">${artwork.price.toLocaleString()}</span>
                     </div>
                     <div className="space-y-4">
-                       <button onClick={() => recordSignal('purchase')} className="w-full bg-white text-black py-6 rounded-2xl font-bold text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-white/20 flex items-center justify-center gap-3">
+                       <button 
+                         onClick={() => { recordSignal('purchase'); setShowCheckout(true); }} 
+                         className="w-full bg-white text-black py-6 rounded-2xl font-bold text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-white/20 flex items-center justify-center gap-3"
+                       >
                          <ShieldCheck size={20} /> Initiate Acquisition
                        </button>
+                       <p className="text-[10px] text-center text-gray-500 uppercase font-bold tracking-widest">
+                         Payments secured by <span className="text-white">Paystack</span>
+                       </p>
                     </div>
                  </div>
               </div>

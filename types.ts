@@ -43,6 +43,7 @@ export interface Artwork {
     saves: number;
     intentScore: number;
   };
+  location: string;
   condition: string;
   provenance?: string;
   exhibitionHistory?: string;
@@ -77,7 +78,6 @@ export interface UserProfile {
   learned_preferences?: LearnedPreferences;
 }
 
-// Alias Profile to UserProfile for compatibility
 export type Profile = UserProfile;
 
 export interface LearnedPreferences {
@@ -250,7 +250,6 @@ export interface Conversation {
   unreadCount: number;
 }
 
-// Added missing exports
 export interface QuizResult {
   preferred_styles: string[];
   preferred_genres: string[];

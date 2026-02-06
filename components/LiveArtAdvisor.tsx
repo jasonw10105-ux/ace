@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { Mic, MicOff, Volume2, Sparkles, ArrowLeft, Brain, Target, Zap, Activity } from 'lucide-react';
@@ -84,7 +85,6 @@ export const LiveArtAdvisor: React.FC<{ onBack: () => void }> = ({ onBack }) => 
             
             if (msg.serverContent?.outputTranscription) {
               setTranscript(prev => prev + " " + msg.serverContent!.outputTranscription!.text);
-              // Simple heuristic to show matches based on keywords
               const text = msg.serverContent.outputTranscription.text.toLowerCase();
               if (text.includes('abstract') || text.includes('modern') || text.includes('blue')) {
                  setMatches(MOCK_ARTWORKS.slice(0, 3));
@@ -97,7 +97,7 @@ export const LiveArtAdvisor: React.FC<{ onBack: () => void }> = ({ onBack }) => 
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
-          systemInstruction: 'You are ArtFlow Advisor, a world-class art consultant. Help the user discover art based on their emotions, space, and style. Keep responses brief and sophisticated. When you suggest a style, use terms like Abstraction, Minimalist, or Cyber-Realism.',
+          systemInstruction: 'You are ArtFlow Advisor. World-class art consultant. If a user expresses intent to buy, mention that ArtFlow handles secure acquisitions via Paystack. Keep responses brief, high-fidelity, and sophisticated. Use terms like Abstraction, Minimalist, or Cyber-Realism.',
           outputAudioTranscription: {},
         }
       });

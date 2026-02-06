@@ -1,115 +1,89 @@
 
 import React, { useState, useEffect } from 'react'
-import { Search, Grid, List, Filter, Activity } from 'lucide-react'
+import { Search, Filter, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import ArtCard from './ArtCard'
-import HorizontalFilterSystem from './HorizontalFilterSystem'
-import FiltersSidebar from './FiltersSidebar'
+import { AssetCard, Grid, Box, Flex, Text, Input, Button } from '../flow'
 import { Artwork } from '../types'
 import toast from 'react-hot-toast'
 
-interface ArtworksPageProps {
-  onCompareToggle?: (artwork: Artwork) => void;
-  comparisonIds?: string[];
-}
-
-const ArtworksPage: React.FC<ArtworksPageProps> = ({ onCompareToggle, comparisonIds = [] }) => {
+const ArtworksPage: React.FC<{ onCompareToggle?: (artwork: Artwork) => void, comparisonIds?: string[] }> = ({ 
+  onCompareToggle, 
+  comparisonIds = [] 
+}) => {
   const [artworks, setArtworks] = useState<Artwork[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [showFilters, setShowFilters] = useState(false)
   
   useEffect(() => {
     const loadArt = async () => {
       setLoading(true)
-      const { data, error } = await supabase
-        .from('artworks')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        toast.error('Connection to frontier failed');
-      } else {
-        setArtworks(data as Artwork[]);
+      try {
+        const { data, error } = await (supabase.from('artworks').select('*').order('created_at', { ascending: false }) as any);
+        if (error) throw error;
+        setArtworks(data || []);
+      } catch (e) {
+        toast.error('Signal interrupted');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     loadArt();
   }, [])
 
-  const filteredArtworks = artworks.filter(art => 
+  const filtered = artworks.filter(art => 
     art.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    art.artist.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (art.tags && art.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())))
+    art.artist.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12">
-      <title>Browse Artworks | ArtFlow</title>
-      
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
-        <div>
-          <h1 className="text-5xl font-serif font-bold italic">Browse Artworks.</h1>
-          <p className="text-gray-400 mt-2 text-lg font-light">Explore real pieces from the global aesthetic collective.</p>
-        </div>
+    <Box maxWidth="1400px" mx="auto" px={2} py={8}>
+      <Flex justify="between" align="end" mb={10} wrap gap={4}>
+        <Box>
+          <Text variant="h1" className="block">Browse <Text variant="italic">Artworks</Text>.</Text>
+          <Text color="#666" size={18} weight="light">Explore the global frontier of aesthetic assets.</Text>
+        </Box>
         
-        <div className="flex items-center gap-4 w-full md:w-auto">
-          <div className="relative flex-1 md:w-80">
+        <Flex gap={2} width={['100%', 'auto']}>
+          <Box width="320px" position="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
             <input
-              type="text"
               placeholder="Search aesthetics..."
-              className="w-full pl-12 pr-6 py-4 bg-white border border-gray-100 rounded-2xl text-sm focus:border-black outline-none transition-all shadow-sm"
+              className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-full text-sm outline-none focus:bg-white border border-transparent focus:border-black transition-all"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
-          </div>
-          <button 
-            onClick={() => setShowFilters(!showFilters)}
-            className={`p-4 rounded-xl transition-all border ${showFilters ? 'bg-black text-white' : 'bg-white text-gray-400 border-gray-100'}`}
-          >
+          </Box>
+          <Button variant="secondary" onClick={() => setShowFilters(!showFilters)}>
             <Filter size={18} />
-          </button>
-        </div>
-      </div>
+          </Button>
+        </Flex>
+      </Flex>
 
-      <div className="flex gap-12">
-        {showFilters && (
-          <aside className="w-80 shrink-0 hidden lg:block animate-in slide-in-from-left duration-500">
-            <FiltersSidebar />
-          </aside>
-        )}
-
-        <div className="flex-1">
-          {loading ? (
-            <div className="h-96 flex flex-col items-center justify-center space-y-4">
-              <Activity className="animate-spin text-black" size={32} />
-              <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Recalibrating Lens...</p>
-            </div>
-          ) : filteredArtworks.length > 0 ? (
-            <div className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-12" : "space-y-6"}>
-               {filteredArtworks.map(art => (
-                 <ArtCard 
-                   key={art.id} 
-                   artwork={art} 
-                   onClick={() => window.location.href = `/artwork/${art.id}`}
-                   onCompareToggle={(e) => {
-                     e.stopPropagation();
-                     onCompareToggle?.(art);
-                   }}
-                   isInComparison={comparisonIds.includes(art.id)}
-                 />
-               ))}
-            </div>
-          ) : (
-            <div className="h-96 flex flex-col items-center justify-center text-center p-20 border-2 border-dashed border-gray-100 rounded-[3rem]">
-               <p className="text-2xl font-serif italic text-gray-300">The collective is currently empty.</p>
-            </div>
+      {loading ? (
+        <Flex height="400px" align="center" justify="center" direction="column" gap={2}>
+          <Loader2 className="animate-spin text-black" size={32} />
+          <Text variant="label" color="#999">Calibrating Lens...</Text>
+        </Flex>
+      ) : (
+        <Grid cols={filtered.length > 0 ? 4 : 1} gap={3}>
+          {filtered.map(art => (
+            <AssetCard 
+              key={art.id} 
+              artwork={art} 
+              onClick={() => window.location.href = `/artwork/${art.id}`}
+              onCompareToggle={(e) => { e.stopPropagation(); onCompareToggle?.(art); }}
+              isInComparison={comparisonIds.includes(art.id)}
+            />
+          ))}
+          {filtered.length === 0 && (
+            <Box py={20} border="1px dashed #E5E5E5" textAlign="center">
+              <Text variant="h2" color="#CCC" italic>The collective is silent.</Text>
+            </Box>
           )}
-        </div>
-      </div>
-    </div>
+        </Grid>
+      )}
+    </Box>
   )
 }
 

@@ -1,14 +1,15 @@
 
 import React, { useState, useRef, useCallback } from 'react';
-import { ArtworkStatus } from '../types';
+import { useNavigate } from 'react-router-dom';
 import { geminiService } from '../services/geminiService';
 import toast from 'react-hot-toast';
 import { 
   ArrowLeft, Save, Camera, Trash2, Tag, Layers, Lock, Globe, ShieldCheck, Zap, 
-  Plus, MessageSquare, Brain, Loader2, CheckCircle2, Sparkles, Activity, Target,
-  // Fix: Added missing DollarSign icon import
-  DollarSign
+  Plus, Brain, Loader2, FileText, Palette, DollarSign, Eye, EyeOff, Unlock,
+  ChevronUp, ChevronDown, Star
 } from 'lucide-react';
+import { Box, Flex, Text, Button, Input, Separator, Spacer } from '../flow';
+import { ArtworkStatus } from '../types';
 
 interface ArtworkImage {
   id: string;
@@ -24,13 +25,13 @@ interface ArtworkCreateProps {
 }
 
 const ArtworkCreate: React.FC<ArtworkCreateProps> = ({ onSave, onCancel }) => {
+  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<ArtworkImage[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeTab, setActiveTab] = useState<'basic' | 'details' | 'pricing' | 'visibility'>('basic');
   const [newTag, setNewTag] = useState('');
-  const [analysisProgress, setAnalysisProgress] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -56,11 +57,6 @@ const ArtworkCreate: React.FC<ArtworkCreateProps> = ({ onSave, onCancel }) => {
 
   const handleNeuralAnalysis = async (base64: string) => {
     setIsAnalyzing(true);
-    setAnalysisProgress(['Opening neural link...']);
-    
-    setTimeout(() => setAnalysisProgress(prev => [...prev, 'Decoding brushwork DNA...']), 800);
-    setTimeout(() => setAnalysisProgress(prev => [...prev, 'Synthesizing curatorial narrative...']), 1600);
-
     try {
       const analysis = await geminiService.analyzeArtworkForUpload(base64);
       if (analysis) {
@@ -75,13 +71,12 @@ const ArtworkCreate: React.FC<ArtworkCreateProps> = ({ onSave, onCancel }) => {
           price: prev.price || analysis.suggestedPrice,
           palette: analysis.palette
         }));
-        toast.success('Aesthetic DNA Mapped');
+        toast.success('Neural Analysis Complete: Metadata Synced.');
       }
     } catch (e) {
-      toast.error('Neural Interrupt. Manual entry required.');
+      console.error('Neural Interrupt', e);
     } finally {
       setIsAnalyzing(false);
-      setAnalysisProgress([]);
     }
   };
 
@@ -103,23 +98,33 @@ const ArtworkCreate: React.FC<ArtworkCreateProps> = ({ onSave, onCancel }) => {
     }
   }, [images.length]);
 
+  // Fix: Added missing handleFileSelect function to handle image input change
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) handleImageUpload(files);
+    if (e.target.files) {
+      handleImageUpload(e.target.files);
+    }
   };
 
   const removeImage = (id: string) => {
     setImages(prev => {
-      const newImages = prev.filter(img => img.id !== id);
-      if (newImages.length > 0 && !newImages.some(img => img.isPrimary)) {
-        newImages[0].isPrimary = true;
+      const filtered = prev.filter(img => img.id !== id);
+      if (filtered.length > 0 && !filtered.some(img => img.isPrimary)) {
+        filtered[0].isPrimary = true;
       }
-      return newImages;
+      return filtered;
     });
   };
 
   const setPrimaryImage = (id: string) => {
     setImages(prev => prev.map(img => ({ ...img, isPrimary: img.id === id })));
+  };
+
+  const reorder = (index: number, direction: 'up' | 'down') => {
+    const newItems = [...images];
+    const target = direction === 'up' ? index - 1 : index + 1;
+    if (target < 0 || target >= newItems.length) return;
+    [newItems[index], newItems[target]] = [newItems[target], newItems[index]];
+    setImages(newItems.map((img, i) => ({ ...img, order: i })));
   };
 
   const handleSave = async () => {
@@ -130,253 +135,247 @@ const ArtworkCreate: React.FC<ArtworkCreateProps> = ({ onSave, onCancel }) => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-32 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
-        <div>
-          <button onClick={onCancel} className="flex items-center gap-2 text-gray-400 hover:text-black mb-4 group">
-            <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
-            <span className="text-xs font-bold uppercase tracking-widest">Back to Studio</span>
-          </button>
-          <div className="flex items-center gap-4">
-             <h1 className="text-5xl font-serif font-bold italic tracking-tight">Catalog Asset.</h1>
-             {isAnalyzing && (
-               <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-500 rounded-full animate-pulse border border-blue-100">
-                  <Brain size={16} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Neural Scan Active</span>
-               </div>
-             )}
-          </div>
-        </div>
-        <button 
-          onClick={handleSave}
-          disabled={isSaving || !formData.title || images.length === 0}
-          className="bg-black text-white px-10 py-4 rounded-2xl font-bold hover:scale-105 transition-all disabled:opacity-30 flex items-center gap-2 shadow-xl shadow-black/10"
-        >
-          {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-          {isSaving ? 'Encrypting Metadata...' : 'Sync to Collection'}
-        </button>
-      </div>
+    <Box maxWidth="1200px" mx="auto" px={2} py={8} className="animate-in fade-in slide-in-from-bottom-2">
+      <Flex justify="between" align="center" mb={10}>
+        <Box>
+          <Button variant="no-border" onClick={onCancel} className="mb-4">
+             <Flex align="center" gap={1}>
+                <ArrowLeft size={16} /> <Text variant="label">Return to Studio</Text>
+             </Flex>
+          </Button>
+          <Flex align="center" gap={2}>
+            <Text variant="h1">Catalog <Text variant="italic">Asset</Text>.</Text>
+            {isAnalyzing && <Brain className="text-blue-500 animate-pulse" size={24} />}
+          </Flex>
+        </Box>
+        <Button size="lg" onClick={handleSave} loading={isSaving} disabled={!formData.title || images.length === 0}>
+           <Save size={18} className="mr-2" /> Sync to Portfolio
+        </Button>
+      </Flex>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-        {/* Sidebar: Visual Assets */}
-        <div className="lg:col-span-1 space-y-8">
-          <div className={`bg-gray-50 rounded-[2.5rem] p-8 border border-gray-100 shadow-inner overflow-hidden relative ${isAnalyzing ? 'ring-2 ring-blue-500 ring-offset-4 ring-offset-white' : ''}`}>
-            <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-6">Visual Engine</h3>
-            
-            {images.length === 0 ? (
-              <div 
-                onClick={() => !isAnalyzing && fileInputRef.current?.click()}
-                className={`aspect-square border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:border-black/20 hover:bg-white transition-all group`}
-              >
-                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm group-hover:scale-110 transition-transform">
-                  <Camera className="w-8 h-8 text-gray-400" />
-                </div>
-                <p className="font-bold text-sm">Upload Masters</p>
-                <p className="text-xs text-gray-400 mt-1 text-center px-4">Identify and analyze aesthetic DNA</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  {images.map((img) => (
-                    <div key={img.id} className="relative aspect-square rounded-2xl overflow-hidden group">
-                      <img src={img.preview} alt="Artwork preview" className="w-full h-full object-cover" />
-                      {!isAnalyzing && (
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                          <button onClick={() => setPrimaryImage(img.id)} className={`p-2 rounded-full ${img.isPrimary ? 'bg-blue-500 text-white' : 'bg-white/20 text-white'}`}><ShieldCheck size={16} /></button>
-                          <button onClick={() => removeImage(img.id)} className="p-2 bg-red-500/80 text-white rounded-full"><Trash2 size={16} /></button>
-                        </div>
-                      )}
-                      {img.isPrimary && <div className="absolute top-2 left-2 px-2 py-0.5 bg-black text-white text-[8px] font-bold uppercase rounded">Anchor</div>}
-                      {isAnalyzing && (
-                        <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
-                           <div className="w-full h-0.5 bg-white/30 relative overflow-hidden">
-                              <div className="absolute inset-0 bg-white animate-[slide_1.5s_infinite]"></div>
-                           </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileSelect} className="hidden" />
+      <Flex direction={['column', 'row']} gap={6}>
+        {/* Visual Engine Sidebar */}
+        <Box width={['100%', '380px']} className="shrink-0 space-y-6">
+           <Box bg="#F8F8F8" p={4} borderRadius="16px" border="1px solid #E5E5E5">
+              <Text variant="label" color="#999" className="block mb-4">Master Visuals</Text>
+              
+              {images.length === 0 ? (
+                <Box 
+                  height="300px" 
+                  border="2px dashed #DDD" 
+                  borderRadius="12px" 
+                  display="flex" 
+                  className="flex-col items-center justify-center cursor-pointer hover:bg-white hover:border-black transition-all group"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Camera size={40} className="text-gray-300 group-hover:text-black mb-2" />
+                  <Text weight="bold" size={14}>Upload Masters</Text>
+                  <Text size={12} color="#999">Max 10 assets (JPG/WebP)</Text>
+                </Box>
+              ) : (
+                <Box className="space-y-4">
+                  <Box className="grid grid-cols-2 gap-2">
+                    {images.map((img, idx) => (
+                      <Box key={img.id} position="relative" borderRadius="8px" overflow="hidden" className="group shadow-sm">
+                        <img src={img.preview} className="w-full aspect-square object-cover" />
+                        <Box position="absolute" top={0.5} right={0.5} className="opacity-0 group-hover:opacity-100 transition-opacity">
+                           <Flex direction="column" gap={0.5}>
+                             <button onClick={() => removeImage(img.id)} className="p-1.5 bg-red-500 text-white rounded-lg"><Trash2 size={12}/></button>
+                             <button onClick={() => setPrimaryImage(img.id)} className={`p-1.5 rounded-lg ${img.isPrimary ? 'bg-black text-white' : 'bg-white text-black'}`}><Star size={12}/></button>
+                           </Flex>
+                        </Box>
+                        <Box position="absolute" bottom={0.5} left={0.5} className="opacity-0 group-hover:opacity-100 transition-opacity">
+                           <Flex gap={0.5}>
+                              <button onClick={() => reorder(idx, 'up')} className="p-1 bg-white/80 rounded"><ChevronUp size={10}/></button>
+                              <button onClick={() => reorder(idx, 'down')} className="p-1 bg-white/80 rounded"><ChevronDown size={10}/></button>
+                           </Flex>
+                        </Box>
+                        {img.isPrimary && <Box position="absolute" top={0.5} left={0.5} bg="black" px={1} borderRadius="2px"><Text color="white" size={8} weight="black">PRIMARY</Text></Box>}
+                      </Box>
+                    ))}
+                    {images.length < 10 && (
+                      <Box 
+                        border="2px dashed #DDD" 
+                        borderRadius="8px" 
+                        className="flex items-center justify-center cursor-pointer hover:bg-white transition-all"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                         <Plus size={20} className="text-gray-400" />
+                      </Box>
+                    )}
+                  </Box>
+                </Box>
+              )}
+              <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileSelect} />
+           </Box>
 
-            {isAnalyzing && (
-               <div className="mt-8 space-y-2 animate-in slide-in-from-top-2">
-                  {analysisProgress.map((p, idx) => (
-                    <div key={idx} className="flex items-center gap-2 text-[10px] text-gray-400 font-mono">
-                       <span className="text-blue-500">▶</span> {p}
-                    </div>
-                  ))}
-               </div>
-            )}
+           <Box bg="black" p={4} borderRadius="16px" className="relative overflow-hidden">
+              <Zap size={24} className="text-blue-400 mb-2" />
+              <Text weight="bold" color="white" className="block mb-1">Commercial Discovery</Text>
+              <Text color="#666" size={13}>Neural calibration ensures this asset is surfaced to high-intent collectors in the matching aesthetic spectrum.</Text>
+              <Box position="absolute" top="-20px" right="-20px" width="100px" height="100px" bg="blue-100" borderRadius="full" style={{ opacity: 0.1, filter: 'blur(40px)' }} />
+           </Box>
+        </Box>
 
-            {formData.palette.primary && !isAnalyzing && (
-               <div className="mt-8 pt-8 border-t border-gray-100 animate-in fade-in">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">Extracted DNA</p>
-                  <div className="flex gap-2">
-                     {[formData.palette.primary, formData.palette.secondary, ...formData.palette.accents].slice(0, 5).map(c => (
-                       <div key={c} className="w-10 h-10 rounded-xl border-2 border-white shadow-sm" style={{ backgroundColor: c }} />
-                     ))}
-                  </div>
-               </div>
-            )}
-          </div>
+        {/* Form Content */}
+        <Box flex={1}>
+           <Box borderBottom="1px solid #E5E5E5" mb={6} className="overflow-x-auto">
+             <Flex gap={4}>
+               {[
+                 { id: 'basic', label: 'Identity', icon: FileText },
+                 { id: 'details', label: 'Heritage', icon: Palette },
+                 { id: 'pricing', label: 'Market', icon: DollarSign },
+                 { id: 'visibility', label: 'Broadcast', icon: Eye }
+               ].map(tab => (
+                 <button
+                   key={tab.id}
+                   onClick={() => setActiveTab(tab.id as any)}
+                   className={`px-4 py-4 border-b-2 font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === tab.id ? 'border-black text-black' : 'border-transparent text-gray-400 hover:text-black'}`}
+                 >
+                   <tab.icon size={14} /> {tab.label}
+                 </button>
+               ))}
+             </Flex>
+           </Box>
 
-          <div className="bg-black p-8 rounded-[2.5rem] text-white relative overflow-hidden shadow-2xl">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl"></div>
-            <h4 className="text-blue-400 font-bold text-[10px] uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Zap size={14} /> AI Synthesis Locked
-            </h4>
-            <p className="text-sm text-gray-400 leading-relaxed font-light mb-6">
-              Neural interface identified this as <span className="text-white font-bold">{formData.subject || 'a new aesthetic vector'}</span>.
-            </p>
-          </div>
-        </div>
+           <Box minHeight="400px">
+              {activeTab === 'basic' && (
+                <Box className="space-y-6 animate-in slide-in-from-right-1">
+                   <Box className="space-y-2">
+                      <Text variant="label" color="#999">Asset Title *</Text>
+                      <input 
+                        className="w-full text-4xl font-serif italic border-none focus:ring-0 outline-none placeholder:text-gray-100"
+                        placeholder="Untitled Synthesis..."
+                        value={formData.title}
+                        onChange={e => setFormData({...formData, title: e.target.value})}
+                      />
+                   </Box>
+                   <Box className="space-y-2">
+                      <Text variant="label" color="#999">Narrative Description</Text>
+                      <textarea 
+                        className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:bg-white transition-all outline-none min-h-[150px] leading-relaxed"
+                        placeholder="Describe the aesthetic intent..."
+                        value={formData.description}
+                        onChange={e => setFormData({...formData, description: e.target.value})}
+                      />
+                   </Box>
+                   <Flex gap={4}>
+                      <Box flex={1} className="space-y-2">
+                         <Text variant="label" color="#999">Medium *</Text>
+                         <Input value={formData.medium} onChange={e => setFormData({...formData, medium: e.target.value})} placeholder="e.g. Oil on Linen" />
+                      </Box>
+                      <Box flex={1} className="space-y-2">
+                         <Text variant="label" color="#999">Movement / Style</Text>
+                         <Input value={formData.style} onChange={e => setFormData({...formData, style: e.target.value})} placeholder="e.g. Neo-Minimalist" />
+                      </Box>
+                   </Flex>
+                </Box>
+              )}
 
-        {/* Main Form Tabs */}
-        <div className="lg:col-span-2">
-          <div className="flex border-b border-gray-100 mb-8 overflow-x-auto whitespace-nowrap">
-            {[
-              { id: 'basic', label: 'Identity', icon: Target },
-              { id: 'details', label: 'Heritage', icon: Layers },
-              { id: 'pricing', label: 'Market', icon: DollarSign },
-              { id: 'visibility', label: 'Broadcast', icon: Globe }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`px-8 py-6 border-b-2 font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 ${
-                  activeTab === tab.id ? 'border-black text-black' : 'border-transparent text-gray-400 hover:text-black'
-                }`}
-              >
-                <tab.icon size={16} /> {tab.label}
-              </button>
-            ))}
-          </div>
+              {activeTab === 'details' && (
+                <Box className="space-y-6 animate-in slide-in-from-right-1">
+                   <Box className="space-y-4">
+                      <Text variant="label" color="#999">Physical Scale</Text>
+                      <Flex gap={2} align="center">
+                         <input type="number" placeholder="W" className="w-20 p-3 bg-gray-50 rounded-xl outline-none" value={formData.dimensions.width || ''} onChange={e => setFormData({...formData, dimensions: {...formData.dimensions, width: parseFloat(e.target.value)}})} />
+                         <Text color="#CCC">×</Text>
+                         <input type="number" placeholder="H" className="w-20 p-3 bg-gray-50 rounded-xl outline-none" value={formData.dimensions.height || ''} onChange={e => setFormData({...formData, dimensions: {...formData.dimensions, height: parseFloat(e.target.value)}})} />
+                         <select className="p-3 bg-gray-50 rounded-xl font-bold text-xs" value={formData.dimensions.unit} onChange={e => setFormData({...formData, dimensions: {...formData.dimensions, unit: e.target.value as any}})}>
+                            <option value="cm">cm</option>
+                            <option value="in">in</option>
+                         </select>
+                      </Flex>
+                   </Box>
+                   <Separator m={4} />
+                   <Box className="space-y-2">
+                      <Text variant="label" color="#999">Provenance & Heritage</Text>
+                      <textarea 
+                        className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none min-h-[100px]"
+                        placeholder="History of ownership..."
+                        value={formData.provenance}
+                        onChange={e => setFormData({...formData, provenance: e.target.value})}
+                      />
+                   </Box>
+                   <Box className="space-y-2">
+                      <Text variant="label" color="#999">Condition Report</Text>
+                      <select className="w-full p-4 bg-gray-50 rounded-2xl font-bold text-sm outline-none" value={formData.condition} onChange={e => setFormData({...formData, condition: e.target.value})}>
+                         <option value="excellent">Excellent</option>
+                         <option value="very-good">Very Good</option>
+                         <option value="good">Good</option>
+                         <option value="fair">Fair</option>
+                      </select>
+                   </Box>
+                </Box>
+              )}
 
-          <div className="space-y-10 min-h-[400px]">
-            {activeTab === 'basic' && (
-              <div className="space-y-8 animate-in slide-in-from-right-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Master Title *</label>
-                  <input 
-                    type="text" 
-                    value={formData.title}
-                    onChange={(e) => setFormData({...formData, title: e.target.value})}
-                    placeholder="Enter visual identity"
-                    className="w-full text-4xl font-serif italic border-b border-gray-50 py-4 focus:border-black outline-none transition-all placeholder:text-gray-100 bg-transparent"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-8">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Physical Medium</label>
-                    <input 
-                      type="text" 
-                      value={formData.medium}
-                      onChange={(e) => setFormData({...formData, medium: e.target.value})}
-                      placeholder="e.g. Mixed Media"
-                      className="w-full border-2 border-gray-50 rounded-2xl px-6 py-4 bg-gray-50 focus:bg-white focus:border-black outline-none transition-all"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Aesthetic Specialty</label>
-                    <input 
-                      type="text" 
-                      value={formData.style}
-                      onChange={(e) => setFormData({...formData, style: e.target.value})}
-                      placeholder="e.g. Neo-Minimalism"
-                      className="w-full border-2 border-gray-50 rounded-2xl px-6 py-4 bg-gray-50 focus:bg-white focus:border-black outline-none transition-all"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Narrative Description</label>
-                  <textarea 
-                    value={formData.description}
-                    onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    rows={6}
-                    placeholder="Synthesize the intent behind this work..."
-                    className="w-full border-2 border-gray-50 rounded-[2rem] px-8 py-6 bg-gray-50 focus:bg-white focus:border-black outline-none transition-all resize-none leading-relaxed font-light text-lg shadow-inner"
-                  />
-                </div>
-              </div>
-            )}
+              {activeTab === 'pricing' && (
+                <Box className="space-y-8 animate-in slide-in-from-right-1">
+                   <Flex gap={4}>
+                      <Box flex={1} className="space-y-2">
+                         <Text variant="label" color="#999">Target Valuation *</Text>
+                         <Flex bg="#F8F8F8" borderRadius="16px" align="center" px={4}>
+                            <Text weight="bold" color="#999">$</Text>
+                            <input 
+                              type="number" 
+                              className="w-full bg-transparent p-4 outline-none font-mono font-bold text-2xl"
+                              placeholder="0.00"
+                              value={formData.price || ''}
+                              onChange={e => setFormData({...formData, price: parseFloat(e.target.value)})}
+                            />
+                         </Flex>
+                      </Box>
+                      <Box flex={1} className="space-y-2">
+                         <Text variant="label" color="#999">Status</Text>
+                         <select className="w-full p-4 h-[64px] bg-gray-50 rounded-2xl font-bold text-sm outline-none" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
+                            <option value="available">Available for Acquisition</option>
+                            <option value="sold">Acquired Asset</option>
+                            <option value="reserved">Reserved Node</option>
+                            <option value="private">Private Archive</option>
+                         </select>
+                      </Box>
+                   </Flex>
+                   <Box bg="#F0F7FF" p={4} borderRadius="16px" border="1px solid #C2E0FF">
+                      <Text size={12} color="#1023D7" lineHeight={1.5}>
+                        <Zap size={12} className="inline mr-1" />
+                        Neural pricing insight suggests a valuation between <b>$2,400 - $3,100</b> based on current stylistic demand for {formData.style || 'this movement'}.
+                      </Text>
+                   </Box>
+                </Box>
+              )}
 
-            {activeTab === 'details' && (
-              <div className="space-y-10 animate-in slide-in-from-right-4">
-                <div className="space-y-4">
-                  <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Physical Scale (Critical for Room Sync)</label>
-                  <div className="flex items-center gap-6">
-                    <div className="flex-1 space-y-2">
-                       <span className="text-[9px] uppercase text-gray-300 font-bold">Width</span>
-                       <input type="number" placeholder="W" value={formData.dimensions.width || ''} onChange={e => setFormData({...formData, dimensions: {...formData.dimensions, width: parseFloat(e.target.value)}})} className="w-full border-2 border-gray-50 rounded-2xl px-6 py-4 bg-gray-50 focus:bg-white outline-none font-mono" />
-                    </div>
-                    <span className="text-gray-200 mt-6">×</span>
-                    <div className="flex-1 space-y-2">
-                       <span className="text-[9px] uppercase text-gray-300 font-bold">Height</span>
-                       <input type="number" placeholder="H" value={formData.dimensions.height || ''} onChange={e => setFormData({...formData, dimensions: {...formData.dimensions, height: parseFloat(e.target.value)}})} className="w-full border-2 border-gray-50 rounded-2xl px-6 py-4 bg-gray-50 focus:bg-white outline-none font-mono" />
-                    </div>
-                    <select 
-                      value={formData.dimensions.unit}
-                      onChange={(e) => setFormData({...formData, dimensions: {...formData.dimensions, unit: e.target.value as any}})}
-                      className="mt-6 border-2 border-gray-50 rounded-2xl px-6 py-4 bg-gray-50 outline-none font-bold"
-                    >
-                      <option value="cm">cm</option>
-                      <option value="in">in</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Provenance History</label>
-                  <textarea value={formData.provenance} onChange={e => setFormData({...formData, provenance: e.target.value})} rows={3} placeholder="History of ownership..." className="w-full border-2 border-gray-50 rounded-2xl px-6 py-4 bg-gray-50 focus:bg-white outline-none resize-none font-light" />
-                </div>
-              </div>
-            )}
+              {activeTab === 'visibility' && (
+                <Box className="space-y-6 animate-in slide-in-from-right-1">
+                   <Box p={6} border="1px solid #E5E5E5" borderRadius="24px" className="bg-gray-50 flex items-center justify-between cursor-pointer" onClick={() => setFormData({...formData, isPublic: !formData.isPublic})}>
+                      <Flex align="center" gap={4}>
+                        <Box p={3} bg="white" borderRadius="12px" shadow="sm">{formData.isPublic ? <Globe size={24}/> : <EyeOff size={24}/>}</Box>
+                        <Box>
+                           <Text weight="bold" className="block">Public Visibility</Text>
+                           <Text size={12} color="#999">{formData.isPublic ? 'Visible to global discovery spectrum' : 'Hidden from public index'}</Text>
+                        </Box>
+                      </Flex>
+                      <Box width="48px" height="24px" borderRadius="full" bg={formData.isPublic ? "black" : "#DDD"} position="relative" className="transition-colors">
+                         <Box width="20px" height="20px" borderRadius="full" bg="white" position="absolute" top="2px" left={formData.isPublic ? "26px" : "2px"} className="transition-all shadow-sm" />
+                      </Box>
+                   </Box>
 
-            {activeTab === 'pricing' && (
-              <div className="space-y-10 animate-in slide-in-from-right-4">
-                <div className="grid grid-cols-2 gap-8">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Target Valuation *</label>
-                    <div className="relative">
-                      <span className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
-                      <input type="number" value={formData.price || ''} onChange={(e) => setFormData({...formData, price: parseFloat(e.target.value)})} className="w-full border-2 border-gray-50 rounded-2xl pl-12 pr-6 py-6 bg-gray-50 focus:bg-white focus:border-black outline-none text-2xl font-mono font-bold" />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Collection Status</label>
-                    <select value={formData.status} onChange={(e) => setFormData({...formData, status: e.target.value as ArtworkStatus})} className="w-full border-2 border-gray-50 rounded-2xl px-6 py-6 bg-gray-50 outline-none font-bold">
-                      <option value="available">Available Signal</option>
-                      <option value="reserved">Reserved Node</option>
-                      <option value="sold">Acquired Asset</option>
-                      <option value="private">Private Archive</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'visibility' && (
-              <div className="space-y-8 animate-in slide-in-from-right-4">
-                 <div onClick={() => setFormData({...formData, isPublic: !formData.isPublic})} className={`p-10 rounded-[3rem] flex items-center justify-between cursor-pointer transition-all border-2 ${formData.isPublic ? 'bg-black border-black text-white shadow-2xl scale-[1.02]' : 'bg-gray-50 border-transparent hover:border-gray-200'}`}>
-                    <div className="flex items-center gap-8">
-                      <div className={`p-5 rounded-2xl ${formData.isPublic ? 'bg-blue-500/20 text-blue-400' : 'bg-white text-gray-400 shadow-sm'}`}>{formData.isPublic ? <Globe size={28} /> : <Lock size={28} />}</div>
-                      <div className="space-y-1">
-                        <h4 className="font-bold text-2xl italic font-serif">Global Discovery</h4>
-                        <p className={`text-sm ${formData.isPublic ? 'text-gray-400' : 'text-gray-500'} font-light max-w-sm`}>Broadcast this identity to the discovery spectrum and collective feed.</p>
-                      </div>
-                    </div>
-                    <div className={`w-16 h-9 rounded-full relative flex items-center px-1 border-2 ${formData.isPublic ? 'bg-blue-500 border-blue-400' : 'bg-gray-200 border-gray-300'}`}>
-                      <div className={`w-6 h-6 bg-white rounded-full shadow-lg transition-transform ${formData.isPublic ? 'translate-x-7' : 'translate-x-0'}`}></div>
-                    </div>
-                 </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+                   <Box p={6} border="1px solid #E5E5E5" borderRadius="24px" className="bg-gray-50 flex items-center justify-between cursor-pointer" onClick={() => setFormData({...formData, allowInquiries: !formData.allowInquiries})}>
+                      <Flex align="center" gap={4}>
+                        <Box p={3} bg="white" borderRadius="12px" shadow="sm">{formData.allowInquiries ? <Unlock size={24}/> : <Lock size={24}/>}</Box>
+                        <Box>
+                           <Text weight="bold" className="block">Open Negotiations</Text>
+                           <Text size={12} color="#999">{formData.allowInquiries ? 'Collectors can initiate acquisition signal' : 'Direct negotiations disabled'}</Text>
+                        </Box>
+                      </Flex>
+                      <Box width="48px" height="24px" borderRadius="full" bg={formData.allowInquiries ? "black" : "#DDD"} position="relative" className="transition-colors">
+                         <Box width="20px" height="20px" borderRadius="full" bg="white" position="absolute" top="2px" left={formData.allowInquiries ? "26px" : "2px"} className="transition-all shadow-sm" />
+                      </Box>
+                   </Box>
+                </Box>
+              )}
+           </Box>
+        </Box>
+      </Flex>
+    </Box>
   );
 };
 

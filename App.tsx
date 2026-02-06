@@ -20,7 +20,6 @@ import { LiveArtAdvisor } from './components/LiveArtAdvisor';
 import CollectionRoadmapPage from './components/CollectionRoadmapPage';
 import { FavoritesPage } from './components/FavoritesPage';
 import { Calendar } from './components/Calendar';
-
 import { AuthFlow } from './components/AuthFlow';
 import { Dashboard } from './components/Dashboard';
 import { CatalogueCreate } from './components/CatalogueCreate';
@@ -52,12 +51,11 @@ const AppContent: React.FC<{
   const [comparisonQueue, setComparisonQueue] = useState<Artwork[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
-  const isViewingRoom = location.pathname.startsWith('/viewing-room');
-  const isAdvisorActive = location.pathname === '/advisor';
+  const isImmersive = location.pathname.startsWith('/viewing-room') || location.pathname === '/advisor';
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      const { data, error } = await (supabase.from('profiles').select('*').eq('id', userId).single() as any);
       if (error) throw error;
       setUser(data as UserProfile);
     } catch (e) {
@@ -87,18 +85,18 @@ const AppContent: React.FC<{
 
   const handleNavItemClick = (item: string) => {
     const routeMap: Record<string, string> = {
-      'Dashboard': '/dashboard', 'My Artworks': '/artworks', 'Upload New': '/upload-new',
-      'Create Catalogue': '/create-catalogue', 'Sales Overview': '/sales', 'Market Trends': '/explore',
-      'Frontier Network': '/artists', 'Lead Intelligence': '/crm', 'Vault': '/vault',
-      'Settings': '/settings', 'Social': '/community', 'Analytics': '/analytics',
-      'Taste Matches': '/advisor', 'Roadmap': '/roadmap', 'Saved Works': '/favorites', 'Calendar': '/calendar'
+      'Dashboard': '/dashboard', 'Vault': '/vault', 'Roadmap': '/roadmap',
+      'Calendar': '/calendar', 'Frontier Network': '/artists', 'Taste Matches': '/advisor',
+      'Saved Works': '/favorites', 'My Artworks': '/artworks', 'Upload New': '/upload-new',
+      'Create Catalogue': '/create-catalogue', 'Lead Intelligence': '/crm', 'Sales Overview': '/sales',
+      'Market Trends': '/explore', 'Settings': '/settings'
     };
-    navigate(routeMap[item] || `/${item.replace(/\s+/g, '-').toLowerCase()}`);
+    navigate(routeMap[item] || '/dashboard');
   };
 
   return (
     <AuthProvider onLogout={logout}>
-      {!isViewingRoom && !isAdvisorActive && (
+      {!isImmersive && (
         <NavigationProvider 
           user={user} 
           onLogout={logout} 
@@ -106,7 +104,6 @@ const AppContent: React.FC<{
           onSearchClick={() => setIsSearchOpen(true)}
         >
           <Toaster position="bottom-right" />
-          
           {isSearchOpen && (
             <SearchOverlay 
               onClose={() => setIsSearchOpen(false)}
@@ -126,12 +123,14 @@ const AppContent: React.FC<{
             <Route path="/search" element={<SearchResultsPage />} />
             <Route path="/explore" element={<IntelligentExplorePage />} />
             <Route path="/waitlist" element={<WaitlistPage />} />
+            <Route path="/auth" element={<AuthFlow onComplete={() => navigate('/dashboard')} onBackToHome={() => navigate('/')} />} />
             <Route path="/recovery" element={<RecoveryFlow onBack={() => navigate('/auth')} onComplete={() => navigate('/dashboard')} />} />
+            
+            {/* Authenticated Routes */}
+            <Route path="/dashboard" element={user ? <Dashboard user={user} onAction={() => navigate('/artworks')} /> : <Navigate to="/auth" />} />
             <Route path="/analytics" element={user ? <ArtistInsights artistId={user.id} onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
             <Route path="/compare" element={<ArtworkComparison artworks={comparisonQueue} onRemove={(id) => setComparisonQueue(prev => prev.filter(a => a.id !== id))} onBack={() => navigate(-1)} />} />
-            <Route path="/auth" element={<AuthFlow onComplete={() => navigate('/dashboard')} onBackToHome={() => navigate('/')} />} />
             <Route path="/onboarding" element={user ? <TasteOnboarding artworks={[]} onComplete={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-            <Route path="/dashboard" element={user ? <Dashboard user={user} onAction={() => navigate('/artworks')} /> : <Navigate to="/auth" />} />
             <Route path="/roadmap" element={user ? <CollectionRoadmapPage onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
             <Route path="/favorites" element={user ? <FavoritesPage onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
             <Route path="/calendar" element={user ? <Calendar onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
@@ -140,16 +139,14 @@ const AppContent: React.FC<{
             <Route path="/sales" element={user ? <Sales user={user} artworks={[]} onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
             <Route path="/crm" element={user ? <ArtistCRM onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
             <Route path="/artwork/:id" element={<ArtworkDetail />} />
-            <Route path="/upload-new" element={user?.role === 'artist' || user?.role === 'both' ? <ArtworkCreate onSave={() => navigate('/dashboard')} onCancel={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-            <Route path="/create-catalogue" element={user?.role === 'artist' || user?.role === 'both' ? <CatalogueCreate onSave={() => navigate('/dashboard')} onCancel={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-            <Route path="/viewing-room/:id" element={<ViewingRoom />} />
-            <Route path="/advisor" element={<LiveArtAdvisor onBack={() => navigate('/dashboard')} />} />
+            <Route path="/upload-new" element={user?.role !== 'collector' ? <ArtworkCreate onSave={() => navigate('/dashboard')} onCancel={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+            <Route path="/create-catalogue" element={user?.role !== 'collector' ? <CatalogueCreate onSave={() => navigate('/dashboard')} onCancel={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
           </Routes>
           <ComparisonBar queue={comparisonQueue} onRemove={(id) => setComparisonQueue(prev => prev.filter(a => a.id !== id))} onClear={() => setComparisonQueue([])} onCompare={() => navigate('/compare')} />
         </NavigationProvider>
       )}
 
-      {(isAdvisorActive || isViewingRoom) && (
+      {isImmersive && (
          <Routes>
             <Route path="/advisor" element={<LiveArtAdvisor onBack={() => navigate('/dashboard')} />} />
             <Route path="/viewing-room/:id" element={<ViewingRoom />} />
