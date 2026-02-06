@@ -1,8 +1,9 @@
 
-import React, { useState } from 'react';
-import { UserProfile } from '../types';
+import React, { useState, useEffect } from 'react';
+import { UserProfile, SmartReminder } from '../types';
 import { Bell, MessageSquare, Globe, Target, ChevronDown, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import { Flex, Text, Box, Button } from '../flow';
+import { reminderService } from '../services/reminderService';
 
 interface HeaderProps {
   user: UserProfile | null;
@@ -15,6 +16,18 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ user, onSearchClick, onLogoClick, onLogout, onNavItemClick }) => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [unreadReminderCount, setUnreadReminderCount] = useState(0);
+
+  useEffect(() => {
+    const checkReminders = () => {
+      const count = reminderService.getReminders().filter(r => !r.is_read).length;
+      setUnreadReminderCount(count);
+    };
+    checkReminders();
+    // Refresh periodically for neural sync
+    const interval = setInterval(checkReminders, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   const navCategories = user?.role === 'collector' 
     ? [
@@ -70,8 +83,11 @@ const Header: React.FC<HeaderProps> = ({ user, onSearchClick, onLogoClick, onLog
              <button onClick={() => onNavItemClick('Negotiations')} className="p-2 text-[#666] hover:text-black transition-colors relative">
                <MessageSquare size={18} />
              </button>
-             <button onClick={() => onNavItemClick('Signals')} className="p-2 text-[#666] hover:text-black transition-colors">
+             <button onClick={() => onNavItemClick('Signals')} className="p-2 text-[#666] hover:text-black transition-colors relative">
                <Bell size={18} />
+               {(unreadReminderCount > 0) && (
+                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white animate-pulse shadow-sm"></span>
+               )}
              </button>
           </Flex>
           

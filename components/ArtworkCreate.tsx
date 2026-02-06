@@ -98,7 +98,6 @@ const ArtworkCreate: React.FC<ArtworkCreateProps> = ({ onSave, onCancel }) => {
     }
   }, [images.length]);
 
-  // Fix: Added missing handleFileSelect function to handle image input change
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       handleImageUpload(e.target.files);
@@ -177,7 +176,7 @@ const ArtworkCreate: React.FC<ArtworkCreateProps> = ({ onSave, onCancel }) => {
                   <Box className="grid grid-cols-2 gap-2">
                     {images.map((img, idx) => (
                       <Box key={img.id} position="relative" borderRadius="8px" overflow="hidden" className="group shadow-sm">
-                        <img src={img.preview} className="w-full aspect-square object-cover" />
+                        <img src={img.preview} className="w-full aspect-square object-cover" alt="Preview" />
                         <Box position="absolute" top={0.5} right={0.5} className="opacity-0 group-hover:opacity-100 transition-opacity">
                            <Flex direction="column" gap={0.5}>
                              <button onClick={() => removeImage(img.id)} className="p-1.5 bg-red-500 text-white rounded-lg"><Trash2 size={12}/></button>
@@ -326,11 +325,15 @@ const ArtworkCreate: React.FC<ArtworkCreateProps> = ({ onSave, onCancel }) => {
                       </Box>
                       <Box flex={1} className="space-y-2">
                          <Text variant="label" color="#999">Status</Text>
-                         <select className="w-full p-4 h-[64px] bg-gray-50 rounded-2xl font-bold text-sm outline-none" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
-                            <option value="available">Available for Acquisition</option>
-                            <option value="sold">Acquired Asset</option>
-                            <option value="reserved">Reserved Node</option>
-                            <option value="private">Private Archive</option>
+                         <select 
+                            className="w-full p-4 h-[64px] bg-gray-50 rounded-2xl font-bold text-sm outline-none border-2 border-transparent focus:border-black transition-all" 
+                            value={formData.status} 
+                            onChange={e => setFormData({...formData, status: e.target.value as any})}
+                         >
+                            <option value="available">available</option>
+                            <option value="sold">sold</option>
+                            <option value="reserved">reserved</option>
+                            <option value="private">private</option>
                          </select>
                       </Box>
                    </Flex>

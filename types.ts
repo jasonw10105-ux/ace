@@ -122,11 +122,16 @@ export interface SmartReminder {
   event_id: string;
   title: string;
   message: string;
-  type: string;
+  type: 'fair_reminder' | 'consignment_expiry' | 'exhibition_lead_up' | 'contact_follow_up' | 'payment_pending';
   due_date: string;
   is_read: boolean;
   priority: 'low' | 'medium' | 'high' | 'urgent';
   action_required: boolean;
+  contact_info?: {
+    name: string;
+    email: string;
+    avatar?: string;
+  };
 }
 
 export interface Roadmap {
@@ -233,12 +238,13 @@ export interface ParsedSearchQuery {
 
 export interface Notification {
   id: string;
-  type: 'price_drop' | 'new_artwork' | 'artwork_liked' | 'new_message';
+  type: 'price_drop' | 'new_artwork' | 'artwork_liked' | 'new_message' | 'reminder';
   title: string;
   message: string;
   read: boolean;
   createdAt: string;
   actionUrl?: string;
+  metadata?: any;
 }
 
 export interface Conversation {

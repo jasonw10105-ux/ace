@@ -1,28 +1,17 @@
 
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-// Added __dirname equivalent for ESM environments
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
+// Resilient config for Vercel/CI environments
 export default defineConfig({
   plugins: [react()],
-  root: './',
   base: './',
   build: {
     outDir: 'dist',
+    emptyOutDir: true,
     rollupOptions: {
-      input: {
-        main: path.resolve(__dirname, 'index.html'),
-      },
-    },
-  },
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './'),
+      // Explicitly define the entry point relative to the project root
+      input: 'index.html',
     },
   },
   server: {

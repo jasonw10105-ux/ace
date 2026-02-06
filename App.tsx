@@ -34,6 +34,7 @@ import { TasteOnboarding } from './components/TasteOnboarding';
 import { ComparisonBar } from './components/ComparisonBar';
 import { ViewingRoom } from './components/ViewingRoom';
 import { RecoveryFlow } from './components/Recovery';
+import NotificationsPage from './components/NotificationsPage';
 import { AuthProvider } from './contexts/AuthProvider';
 import { logger } from './services/logger';
 import { Artwork, UserProfile } from './types';
@@ -89,7 +90,7 @@ const AppContent: React.FC<{
       'Calendar': '/calendar', 'Frontier Network': '/artists', 'Taste Matches': '/advisor',
       'Saved Works': '/favorites', 'My Artworks': '/artworks', 'Upload New': '/upload-new',
       'Create Catalogue': '/create-catalogue', 'Lead Intelligence': '/crm', 'Sales Overview': '/sales',
-      'Market Trends': '/explore', 'Settings': '/settings'
+      'Market Trends': '/explore', 'Settings': '/settings', 'Signals': '/signals'
     };
     navigate(routeMap[item] || '/dashboard');
   };
@@ -138,6 +139,7 @@ const AppContent: React.FC<{
             <Route path="/settings" element={user ? <EnhancedCollectorSettings user={user} onSave={(u) => setUser({...user, ...u})} onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
             <Route path="/sales" element={user ? <Sales user={user} artworks={[]} onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
             <Route path="/crm" element={user ? <ArtistCRM onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+            <Route path="/signals" element={user ? <NotificationsPage /> : <Navigate to="/auth" />} />
             <Route path="/artwork/:id" element={<ArtworkDetail />} />
             <Route path="/upload-new" element={user?.role !== 'collector' ? <ArtworkCreate onSave={() => navigate('/dashboard')} onCancel={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
             <Route path="/create-catalogue" element={user?.role !== 'collector' ? <CatalogueCreate onSave={() => navigate('/dashboard')} onCancel={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />

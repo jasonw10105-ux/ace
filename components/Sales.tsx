@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell 
 } from 'recharts';
 import { format, subMonths } from 'date-fns';
-import { DollarSign, Package, TrendingUp, Users, Download, Eye } from 'lucide-react';
+import { DollarSign, Package, TrendingUp, Users, Download, Eye, FileText, ShieldCheck, ExternalLink } from 'lucide-react';
 import { UserProfile, Artwork } from '../types';
 
 interface SalesProps {
@@ -44,9 +44,36 @@ export const Sales: React.FC<SalesProps> = ({ user, artworks, onBack }) => {
   }, [isArtist]);
 
   const salesHistory = [
-    { id: '1', title: 'Neo-Tokyo Midnight', date: '2024-05-12', client: 'Sarah J.', price: 1850, status: 'shipped' },
-    { id: '2', title: 'Ethereal Synthesis', date: '2024-04-28', client: 'Michael C.', price: 3200, status: 'delivered' },
-    { id: '3', title: 'Whispers of the Tundra', date: '2024-04-10', client: 'Anon Collector', price: 4500, status: 'sold' },
+    { 
+      id: '1', 
+      title: 'Neo-Tokyo Midnight', 
+      date: '2024-05-12', 
+      client: 'Sarah J.', 
+      price: 1850, 
+      status: 'shipped',
+      coaUrl: '#',
+      invoiceUrl: '#'
+    },
+    { 
+      id: '2', 
+      title: 'Ethereal Synthesis', 
+      date: '2024-04-28', 
+      client: 'Michael C.', 
+      price: 3200, 
+      status: 'delivered',
+      coaUrl: '#',
+      invoiceUrl: '#'
+    },
+    { 
+      id: '3', 
+      title: 'Whispers of the Tundra', 
+      date: '2024-04-10', 
+      client: 'Anon Collector', 
+      price: 4500, 
+      status: 'sold',
+      coaUrl: '#',
+      invoiceUrl: '#'
+    },
   ];
 
   return (
@@ -135,6 +162,8 @@ export const Sales: React.FC<SalesProps> = ({ user, artworks, onBack }) => {
                     <th className="px-10 py-6">Identity</th>
                     <th className="px-6 py-6">Date</th>
                     <th className="px-6 py-6">Value</th>
+                    <th className="px-6 py-6">Digital COA</th>
+                    <th className="px-6 py-6">Invoice</th>
                     <th className="px-10 py-6 text-right">Status</th>
                   </tr>
                 </thead>
@@ -149,6 +178,26 @@ export const Sales: React.FC<SalesProps> = ({ user, artworks, onBack }) => {
                       </td>
                       <td className="px-6 py-6 text-sm text-gray-500">{sale.date}</td>
                       <td className="px-6 py-6 font-mono font-bold">${sale.price.toLocaleString()}</td>
+                      <td className="px-6 py-6">
+                        <a 
+                          href={sale.coaUrl} 
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-blue-600 hover:text-white transition-all group/coa"
+                        >
+                          <ShieldCheck size={14} /> 
+                          <span>Verified</span>
+                          <ExternalLink size={10} className="opacity-0 group-hover/coa:opacity-100 transition-opacity" />
+                        </a>
+                      </td>
+                      <td className="px-6 py-6">
+                        <a 
+                          href={sale.invoiceUrl} 
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 text-gray-600 rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-black hover:text-white transition-all group/inv"
+                        >
+                          <FileText size={14} /> 
+                          <span>PDF</span>
+                          <ExternalLink size={10} className="opacity-0 group-hover/inv:opacity-100 transition-opacity" />
+                        </a>
+                      </td>
                       <td className="px-10 py-6 text-right">
                         <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                           sale.status === 'delivered' ? 'bg-green-50 text-green-600' : 

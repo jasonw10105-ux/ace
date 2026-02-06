@@ -3,10 +3,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { 
   Calendar as CalendarIcon, Plus, Bell, Clock, MapPin, Users, DollarSign,
-  AlertTriangle, CheckCircle, XCircle, Edit, Trash2, Eye, ArrowLeft, Zap
+  AlertTriangle, CheckCircle, XCircle, Edit, Trash2, Eye, ArrowLeft, Zap,
+  ArrowRight
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { CalendarEvent, SmartReminder } from '../types';
+import { reminderService } from '../services/reminderService';
 import toast from 'react-hot-toast';
 
 export const Calendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
@@ -19,8 +21,15 @@ export const Calendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [showReminders, setShowReminders] = useState(false);
   const [filterType, setFilterType] = useState('all');
 
+  useEffect(() => {
+    // Synchronize reminders from the current event pool
+    const synced = reminderService.generateRemindersFromEvents(events);
+    setReminders(synced);
+  }, [events]);
+
   const markReminderAsRead = (id: string) => {
-    setReminders(prev => prev.filter(r => r.id !== id));
+    reminderService.markAsRead(id);
+    setReminders(reminderService.getReminders());
     toast.success('Signal Processed');
   };
 
@@ -31,14 +40,14 @@ export const Calendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-16">
         <div>
           <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-black mb-4 group transition-colors">
-            <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> Back Hub
+            <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> Return to Hub
           </button>
           <h1 className="text-6xl font-serif font-bold italic tracking-tight">The Almanac.</h1>
           <p className="text-gray-400 mt-2 text-xl font-light">Managing the chronological spectrum of your collection.</p>
         </div>
         <div className="flex gap-4">
           <button onClick={() => setShowReminders(!showReminders)} className={`px-8 py-4 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 ${showReminders ? 'bg-blue-500 text-white shadow-xl shadow-blue-500/20' : 'bg-gray-50 border border-gray-100 text-gray-400'}`}>
-            <Bell size={18} /> Smart Reminders ({reminders.length})
+            <Bell size={18} /> Smart Reminders ({reminders.filter(r => !r.is_read).length})
           </button>
           <button className="bg-black text-white px-8 py-4 rounded-2xl font-bold text-xs uppercase tracking-widest shadow-xl shadow-black/10 flex items-center gap-2 hover:scale-105 transition-all">
             <Plus size={18} /> Schedule Event
@@ -50,23 +59,41 @@ export const Calendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
          {/* Reminders Sidebar */}
          {showReminders && (
            <div className="lg:col-span-4 space-y-6 animate-in slide-in-from-left duration-500">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-blue-500 mb-6 flex items-center gap-2">
-                 <Zap size={14} className="animate-pulse" /> Neural Alerts
-              </h3>
-              {reminders.length === 0 ? (
-                <div className="p-10 bg-gray-50 rounded-[2.5rem] text-center border-2 border-dashed border-gray-100">
-                   <p className="text-sm italic text-gray-300">No high-priority signals currently requires attention.</p>
+              <div className="flex justify-between items-center mb-6">
+                 <h3 className="text-xs font-bold uppercase tracking-widest text-blue-500 flex items-center gap-2">
+                    <Zap size={14} className="animate-pulse" /> Neural Alerts
+                 </h3>
+                 <button onClick={() => window.location.href = '/signals'} className="text-[10px] font-bold text-gray-400 uppercase hover:text-black transition-colors">History</button>
+              </div>
+
+              {reminders.filter(r => !r.is_read).length === 0 ? (
+                <div className="p-12 bg-gray-50 rounded-[2.5rem] text-center border-2 border-dashed border-gray-100">
+                   <CheckCircle className="mx-auto text-gray-200 mb-4" size={32} />
+                   <p className="text-sm italic text-gray-300">All tactical reminders cleared.</p>
                 </div>
               ) : (
-                reminders.map(r => (
-                  <div key={r.id} className={`p-6 bg-white border border-gray-100 rounded-[2rem] shadow-sm relative overflow-hidden group ${r.priority === 'urgent' ? 'border-red-100' : ''}`}>
+                reminders.filter(r => !r.is_read).map(r => (
+                  <div key={r.id} className={`p-6 bg-white border border-gray-100 rounded-[2rem] shadow-sm relative overflow-hidden group transition-all hover:shadow-xl ${r.priority === 'urgent' ? 'border-red-100' : ''}`}>
                      {r.priority === 'urgent' && <div className="absolute top-0 left-0 w-1.5 h-full bg-red-500"></div>}
                      <div className="flex justify-between items-start mb-4">
-                        <span className="text-[9px] font-black uppercase bg-gray-50 px-2 py-0.5 rounded tracking-widest text-gray-400">{r.type}</span>
-                        <button onClick={() => markReminderAsRead(r.id)} className="text-gray-300 hover:text-green-500 transition-colors"><CheckCircle size={16}/></button>
+                        <span className="text-[9px] font-black uppercase bg-gray-50 px-2 py-0.5 rounded tracking-widest text-gray-400">{r.type.replace('_', ' ')}</span>
+                        <button onClick={() => markReminderAsRead(r.id)} className="text-gray-200 hover:text-green-500 transition-colors group/check">
+                           <CheckCircle size={18} className="group-hover/check:scale-110 transition-transform" />
+                        </button>
                      </div>
                      <h4 className="font-bold text-sm mb-2">{r.title}</h4>
-                     <p className="text-xs text-gray-400 font-light leading-relaxed">{r.message}</p>
+                     <p className="text-xs text-gray-400 font-light leading-relaxed mb-4">{r.message}</p>
+                     
+                     {r.contact_info && (
+                       <div className="flex items-center gap-2 mb-4 p-2 bg-gray-50 rounded-xl">
+                          <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center text-[10px] font-bold border border-gray-100">{r.contact_info.name[0]}</div>
+                          <span className="text-[10px] font-bold text-gray-500">{r.contact_info.name}</span>
+                       </div>
+                     )}
+
+                     <button onClick={() => markReminderAsRead(r.id)} className="w-full py-2 bg-black text-white rounded-lg text-[9px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 group/btn">
+                        Execute Action <ArrowRight size={10} className="group-hover/btn:translate-x-1 transition-transform" />
+                     </button>
                   </div>
                 ))
               )}
@@ -74,33 +101,33 @@ export const Calendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
          )}
 
          <div className={`${showReminders ? 'lg:col-span-8' : 'lg:col-span-12'} space-y-12`}>
-            <section className="bg-white border border-gray-100 rounded-[3rem] p-10 shadow-sm overflow-hidden">
+            <section className="bg-white border border-gray-100 rounded-[3.5rem] p-12 shadow-sm overflow-hidden">
                <div className="flex justify-between items-center mb-10 pb-6 border-b border-gray-50">
                   <h3 className="text-xl font-serif font-bold italic">Upcoming Milestones</h3>
                   <div className="flex items-center gap-4">
                      <select 
                       value={filterType} 
                       onChange={e => setFilterType(e.target.value)}
-                      className="bg-gray-50 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest outline-none border-none"
+                      className="bg-gray-50 px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest outline-none border-none cursor-pointer hover:bg-gray-100 transition-colors"
                      >
-                        <option value="all">All Channels</option>
+                        <option value="all">Entire Spectrum</option>
                         <option value="fair">Art Fairs</option>
                         <option value="exhibition">Exhibitions</option>
-                        <option value="consignment">Financials</option>
+                        <option value="consignment">Consignments</option>
                      </select>
                   </div>
                </div>
 
                <div className="divide-y divide-gray-50">
                   {events.filter(e => filterType === 'all' || e.type === filterType).map(ev => (
-                    <div key={ev.id} className="py-8 flex items-center gap-10 group hover:px-6 transition-all rounded-3xl">
+                    <div key={ev.id} className="py-8 flex items-center gap-10 group hover:px-6 transition-all rounded-3xl cursor-pointer">
                        <div className="text-center w-16">
-                          <p className="text-[10px] font-bold uppercase text-gray-400 mb-1">{new Date(ev.start_date).toLocaleDateString('en-US', { month: 'short' })}</p>
+                          <p className="text-[10px] font-bold uppercase text-gray-300 mb-1">{new Date(ev.start_date).toLocaleDateString('en-US', { month: 'short' })}</p>
                           <p className="text-4xl font-serif font-bold italic leading-none">{new Date(ev.start_date).getDate()}</p>
                        </div>
                        <div className="flex-1 space-y-1">
                           <div className="flex items-center gap-3">
-                             <h4 className="text-2xl font-serif font-bold italic group-hover:text-blue-500 transition-colors cursor-pointer">{ev.title}</h4>
+                             <h4 className="text-2xl font-serif font-bold italic group-hover:text-blue-500 transition-colors">{ev.title}</h4>
                              <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${
                                ev.priority === 'urgent' ? 'bg-red-50 text-red-500' : ev.priority === 'high' ? 'bg-orange-50 text-orange-500' : 'bg-gray-50 text-gray-400'
                              }`}>{ev.priority}</span>
