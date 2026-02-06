@@ -52,6 +52,16 @@ export interface Artwork {
   allowInquiries: boolean;
 }
 
+/**
+ * Fix: Added SavedSearch interface to resolve error in SearchOverlay.tsx
+ */
+export interface SavedSearch {
+  id: string;
+  query: string;
+  filters?: any;
+  createdAt?: string;
+}
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -69,7 +79,10 @@ export interface UserProfile {
     priceRange: [number, number];
   };
   history: string[]; 
-  savedSearches: any[];
+  /**
+   * Fix: Updated savedSearches to use SavedSearch interface
+   */
+  savedSearches: SavedSearch[];
   tasteProfile: {
     likedIds: string[];
     dislikedIds: string[];
@@ -154,47 +167,6 @@ export interface Roadmap {
   updated_at?: string
 }
 
-export interface CatalogueAccessConfig {
-  mode: 'public' | 'password' | 'invite_only' | 'link_only';
-  password?: string;
-  whitelistedTags: string[];
-  whitelistedEmails: string[];
-  timedAccess: boolean;
-  autoPublishAt?: string;
-  isViewingRoomEnabled: boolean;
-  allowDirectNegotiation: boolean;
-}
-
-export interface Catalogue {
-  id: string;
-  title: string;
-  name: string;
-  description?: string;
-  artworks: Artwork[];
-  artist_id: string;
-  is_published: boolean;
-  isPublic: boolean;
-  access_config: CatalogueAccessConfig;
-  items: CatalogueItem[];
-  created_at: string;
-  updated_at: string;
-  branding?: {
-    primaryColor: string;
-    secondaryColor: string;
-    fontFamily: string;
-    layout: 'grid' | 'list';
-    showPrices: boolean;
-    showDescriptions: boolean;
-    showArtistInfo: boolean;
-  };
-}
-
-export interface SavedSearch {
-  id: string;
-  query: string;
-  timestamp: string;
-}
-
 export interface Contact {
   id: string;
   name: string;
@@ -204,6 +176,9 @@ export interface Contact {
   tags: string[];
   intentScore?: number;
   intentLabel?: 'Critical' | 'High' | 'Medium' | 'Low';
+  acquisitionLikelihood?: number;
+  priceSensitivity?: 'Aggressive' | 'Balanced' | 'Price-Sensitive';
+  topInterestArtworkId?: string;
   location: string;
   totalInquiries: number;
   totalPurchases: number;
@@ -286,6 +261,46 @@ export interface CatalogueItem {
   content: any;
   order: number;
   styles?: any;
+}
+
+/**
+ * Fix: Added CatalogueAccessConfig interface to resolve error in CatalogueCreate.tsx
+ */
+export interface CatalogueAccessConfig {
+  mode: 'public' | 'invite_only' | 'password' | 'link_only';
+  password?: string;
+  whitelistedTags: string[];
+  whitelistedEmails: string[];
+  timedAccess: boolean;
+  autoPublishAt?: string;
+  isViewingRoomEnabled: boolean;
+  allowDirectNegotiation: boolean;
+}
+
+/**
+ * Fix: Added Catalogue interface to resolve error in CatalogueBuilder.tsx and ViewingRoom.tsx
+ */
+export interface Catalogue {
+  id: string;
+  title: string;
+  name: string;
+  artworks: Artwork[];
+  artist_id: string;
+  is_published: boolean;
+  isPublic: boolean;
+  access_config: CatalogueAccessConfig;
+  branding?: {
+    primaryColor: string;
+    secondaryColor: string;
+    fontFamily: string;
+    layout: string;
+    showPrices: boolean;
+    showDescriptions: boolean;
+    showArtistInfo: boolean;
+  };
+  items: CatalogueItem[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Exhibition {

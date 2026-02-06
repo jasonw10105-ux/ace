@@ -1,34 +1,35 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { 
-  Calendar as CalendarIcon, Plus, Bell, Clock, MapPin, Users, DollarSign,
-  AlertTriangle, CheckCircle, XCircle, Edit, Trash2, Eye, ArrowLeft, Zap,
+  Plus, Bell, Clock, MapPin, 
+  CheckCircle, Edit, Trash2, ArrowLeft, Zap,
   ArrowRight
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 import { CalendarEvent, SmartReminder } from '../types';
 import { reminderService } from '../services/reminderService';
 import toast from 'react-hot-toast';
 
 export const Calendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [events, setEvents] = useState<CalendarEvent[]>([
-    { id: '1', title: 'Art Basel Prep', type: 'fair', start_date: '2024-06-15', status: 'upcoming', priority: 'high' },
-    { id: '2', title: 'Consignment Expiry: Digital Rust', type: 'consignment', start_date: '2024-05-28', status: 'upcoming', priority: 'urgent' },
+    { id: 'e-1', title: 'Art Basel Basel Prep', type: 'fair', start_date: '2024-06-15', status: 'upcoming', priority: 'high' },
+    { id: 'e-2', title: 'Consignment Expiry: Digital Rust', type: 'consignment', start_date: '2024-05-28', status: 'upcoming', priority: 'urgent' },
+    { id: 'e-3', title: 'Solo Show Setup', type: 'exhibition', start_date: '2024-05-22', status: 'upcoming', priority: 'high' },
   ]);
   const [reminders, setReminders] = useState<SmartReminder[]>([]);
-  const [loading, setLoading] = useState(false);
   const [showReminders, setShowReminders] = useState(false);
   const [filterType, setFilterType] = useState('all');
 
   useEffect(() => {
-    // Synchronize reminders from the current event pool
-    const synced = reminderService.generateRemindersFromEvents(events);
-    setReminders(synced);
+    const syncReminders = async () => {
+      const synced = await reminderService.generateRemindersFromEvents(events);
+      setReminders(synced);
+    };
+    syncReminders();
   }, [events]);
 
-  const markReminderAsRead = (id: string) => {
-    reminderService.markAsRead(id);
+  const markReminderAsRead = async (id: string) => {
+    await reminderService.markAsRead(id);
     setReminders(reminderService.getReminders());
     toast.success('Signal Processed');
   };
@@ -56,14 +57,13 @@ export const Calendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-         {/* Reminders Sidebar */}
          {showReminders && (
            <div className="lg:col-span-4 space-y-6 animate-in slide-in-from-left duration-500">
               <div className="flex justify-between items-center mb-6">
                  <h3 className="text-xs font-bold uppercase tracking-widest text-blue-500 flex items-center gap-2">
                     <Zap size={14} className="animate-pulse" /> Neural Alerts
                  </h3>
-                 <button onClick={() => window.location.href = '/signals'} className="text-[10px] font-bold text-gray-400 uppercase hover:text-black transition-colors">History</button>
+                 <button onClick={() => window.location.href = '/signals'} className="text-[10px] font-bold text-gray-400 uppercase hover:text-black transition-colors">Open Hub</button>
               </div>
 
               {reminders.filter(r => !r.is_read).length === 0 ? (
@@ -83,16 +83,8 @@ export const Calendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                      </div>
                      <h4 className="font-bold text-sm mb-2">{r.title}</h4>
                      <p className="text-xs text-gray-400 font-light leading-relaxed mb-4">{r.message}</p>
-                     
-                     {r.contact_info && (
-                       <div className="flex items-center gap-2 mb-4 p-2 bg-gray-50 rounded-xl">
-                          <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center text-[10px] font-bold border border-gray-100">{r.contact_info.name[0]}</div>
-                          <span className="text-[10px] font-bold text-gray-500">{r.contact_info.name}</span>
-                       </div>
-                     )}
-
                      <button onClick={() => markReminderAsRead(r.id)} className="w-full py-2 bg-black text-white rounded-lg text-[9px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 group/btn">
-                        Execute Action <ArrowRight size={10} className="group-hover/btn:translate-x-1 transition-transform" />
+                        Mark Actioned <ArrowRight size={10} className="group-hover/btn:translate-x-1 transition-transform" />
                      </button>
                   </div>
                 ))
@@ -104,18 +96,16 @@ export const Calendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             <section className="bg-white border border-gray-100 rounded-[3.5rem] p-12 shadow-sm overflow-hidden">
                <div className="flex justify-between items-center mb-10 pb-6 border-b border-gray-50">
                   <h3 className="text-xl font-serif font-bold italic">Upcoming Milestones</h3>
-                  <div className="flex items-center gap-4">
-                     <select 
-                      value={filterType} 
-                      onChange={e => setFilterType(e.target.value)}
-                      className="bg-gray-50 px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest outline-none border-none cursor-pointer hover:bg-gray-100 transition-colors"
-                     >
-                        <option value="all">Entire Spectrum</option>
-                        <option value="fair">Art Fairs</option>
-                        <option value="exhibition">Exhibitions</option>
-                        <option value="consignment">Consignments</option>
-                     </select>
-                  </div>
+                  <select 
+                   value={filterType} 
+                   onChange={e => setFilterType(e.target.value)}
+                   className="bg-gray-50 px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest outline-none border-none cursor-pointer hover:bg-gray-100 transition-colors"
+                  >
+                     <option value="all">Entire Spectrum</option>
+                     <option value="fair">Art Fairs</option>
+                     <option value="exhibition">Exhibitions</option>
+                     <option value="consignment">Consignments</option>
+                  </select>
                </div>
 
                <div className="divide-y divide-gray-50">
@@ -133,8 +123,8 @@ export const Calendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                              }`}>{ev.priority}</span>
                           </div>
                           <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-gray-300">
-                             <span className="flex items-center gap-1"><MapPin size={10} className="text-blue-500"/> {ev.location || 'Global Sector'}</span>
-                             <span className="flex items-center gap-1"><Clock size={10}/> {ev.time || 'All Day'}</span>
+                             <span className="flex items-center gap-1"><MapPin size={10} className="text-blue-500"/> Global Sector</span>
+                             <span className="flex items-center gap-1"><Clock size={10}/> All Day</span>
                           </div>
                        </div>
                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
