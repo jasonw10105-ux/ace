@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
-import { Bell, MessageSquare, Globe, Target } from 'lucide-react';
+import { Bell, MessageSquare, Globe, Target, ChevronDown, LogOut, Settings as SettingsIcon } from 'lucide-react';
+import { Flex, Text, Box, Button } from '../flow';
 
 interface HeaderProps {
   user: UserProfile | null;
@@ -15,109 +16,94 @@ const Header: React.FC<HeaderProps> = ({ user, onSearchClick, onLogoClick, onLog
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  const getNavItems = () => {
-    if (!user) {
-      return [
-        { name: 'Discover', items: ['Trending', 'New Arrivals', 'Join'] },
-        { name: 'Mediums', items: ['Oil', 'Acrylic', 'Digital'] }
-      ];
-    }
-
-    if (user.role === 'artist' || user.role === 'both') {
-      return [
+  const navCategories = user?.role === 'collector' 
+    ? [
+        { name: 'Collector', items: ['Dashboard', 'Vault', 'Roadmap', 'Calendar', 'Frontier Network'] },
+        { name: 'Curations', items: ['Taste Matches', 'Saved Works'] }
+      ]
+    : [
         { name: 'Studio', items: ['Dashboard', 'My Artworks', 'Upload New', 'Create Catalogue', 'Calendar'] },
         { name: 'Intelligence', items: ['Lead Intelligence', 'Sales Overview', 'Market Trends', 'Frontier Network'] }
       ];
-    }
-
-    return [
-      { name: 'Collector', items: ['Dashboard', 'Vault', 'Roadmap', 'Calendar', 'Frontier Network'] },
-      { name: 'Curations', items: ['Taste Matches', 'Saved Works'] }
-    ];
-  };
-
-  const navCategories = getNavItems();
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-[150] bg-white/90 backdrop-blur-lg border-b border-gray-100 h-20">
-      <div className="max-w-7xl mx-auto px-4 h-full flex items-center justify-between">
-        <div onClick={onLogoClick} className="cursor-pointer flex items-center gap-2 group">
-          <div className="w-10 h-10 bg-black rounded-full flex items-center justify-center text-white font-bold text-xl group-hover:rotate-12 transition-transform">A</div>
-          <span className="text-2xl font-serif font-bold tracking-tight">ArtFlow</span>
-        </div>
+    <Box as="header" position="fixed" zIndex={200} width="100%" bg="white" border="1px solid #E5E5E5" height="80px">
+      <Flex maxWidth="1400px" mx="auto" px={2} height="100%" align="center" justify="between">
+        <Flex align="center" gap={6}>
+          <Box onClick={onLogoClick} className="cursor-pointer group">
+            <Text variant="h2" weight="black" tracking="-0.04em">ArtFlow</Text>
+          </Box>
 
-        <nav className="hidden lg:flex items-center gap-8 h-full">
-          {navCategories.map((cat) => (
-            <div key={cat.name} className="relative group h-full flex items-center" onMouseEnter={() => setActiveMenu(cat.name)} onMouseLeave={() => setActiveMenu(null)}>
-              <button className="text-sm font-bold uppercase tracking-widest text-gray-500 hover:text-black transition-colors flex items-center gap-1">
-                {cat.name}
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-              </button>
-              {activeMenu === cat.name && (
-                <div className="absolute top-20 left-1/2 -translate-x-1/2 w-56 bg-white shadow-2xl border border-gray-100 p-4 rounded-b-xl animate-in fade-in slide-in-from-top-2 duration-200">
-                  <ul className="space-y-3">
+          <Flex as="nav" gap={4} className="hidden lg:flex" height="100%">
+            {navCategories.map((cat) => (
+              <Box key={cat.name} position="relative" onMouseEnter={() => setActiveMenu(cat.name)} onMouseLeave={() => setActiveMenu(null)}>
+                <Flex align="center" gap={0.5} py={3} className="cursor-pointer">
+                  <Text variant="label" color={activeMenu === cat.name ? "black" : "#666"}>{cat.name}</Text>
+                  <ChevronDown size={12} color={activeMenu === cat.name ? "black" : "#666"} />
+                </Flex>
+                {activeMenu === cat.name && (
+                  <Box position="absolute" top="100%" left="0" width="240px" bg="white" shadow="0 10px 30px rgba(0,0,0,0.1)" border="1px solid #E5E5E5" p={2} borderRadius="0 0 8px 8px" className="animate-in fade-in slide-in-from-top-1">
                     {cat.items.map((item) => (
-                      <li key={item}>
-                        <button 
-                          onClick={() => { 
-                            onNavItemClick(item); 
-                            setActiveMenu(null); 
-                          }} 
-                          className="w-full text-left text-sm text-gray-400 hover:text-black hover:translate-x-1 inline-block transition-all"
-                        >
-                          {item}
-                        </button>
-                      </li>
+                      <Box 
+                        key={item} 
+                        p={1.5} 
+                        px={2} 
+                        className="hover:bg-[#F3F3F3] cursor-pointer transition-colors"
+                        onClick={() => { onNavItemClick(item); setActiveMenu(null); }}
+                      >
+                        <Text size={14} weight="medium">{item}</Text>
+                      </Box>
                     ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          ))}
-        </nav>
+                  </Box>
+                )}
+              </Box>
+            ))}
+          </Flex>
+        </Flex>
 
-        <div className="flex items-center gap-6">
-          <button onClick={onSearchClick} className="flex items-center gap-3 bg-gray-50 hover:bg-gray-100 border border-gray-100 px-4 py-2 rounded-full text-gray-400 transition-colors">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            <span className="hidden sm:inline text-xs font-bold uppercase tracking-widest">Taste Search</span>
-          </button>
+        <Flex align="center" gap={3}>
+          <Button variant="secondary" size="sm" onClick={onSearchClick} className="hidden md:flex">
+            <Text variant="label" size={10}>Taste Search</Text>
+          </Button>
           
-          {user && (
-            <div className="flex items-center gap-4 text-gray-400">
-               <button onClick={() => onNavItemClick('Negotiations')} className="hover:text-black transition-colors relative">
-                 <MessageSquare size={20} />
-                 <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full border border-white"></div>
-               </button>
-               <button onClick={() => onNavItemClick('Signals')} className="hover:text-black transition-colors">
-                 <Bell size={20} />
-               </button>
-            </div>
-          )}
+          <Flex gap={1} align="center" mr={1}>
+             <button onClick={() => onNavItemClick('Negotiations')} className="p-2 text-[#666] hover:text-black transition-colors relative">
+               <MessageSquare size={18} />
+             </button>
+             <button onClick={() => onNavItemClick('Signals')} className="p-2 text-[#666] hover:text-black transition-colors">
+               <Bell size={18} />
+             </button>
+          </Flex>
           
-          {user ? (
-            <div className="relative">
-              <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold border border-gray-100 hover:border-black transition-all">
-                {user.email[0].toUpperCase()}
-              </button>
-              {isProfileOpen && (
-                <div className="absolute top-12 right-0 w-64 bg-white shadow-2xl border border-gray-100 rounded-2xl p-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="pb-4 mb-4 border-b border-gray-50">
-                    <p className="font-medium truncate">{user.email}</p>
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-blue-500">{user.role}</span>
-                  </div>
-                  <ul className="space-y-2 mb-4">
-                    <li><button onClick={() => { onNavItemClick('Settings'); setIsProfileOpen(false); }} className="w-full text-left text-sm text-gray-400 hover:text-black font-bold uppercase tracking-widest transition-colors">Intelligence Controls</button></li>
-                  </ul>
-                  <button onClick={onLogout} className="w-full text-left text-sm py-3 px-3 border-t border-gray-50 text-red-500 font-bold hover:bg-red-50 rounded-b-lg transition-colors">Log Out</button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <button className="bg-black text-white px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest">Login</button>
-          )}
-        </div>
-      </div>
-    </header>
+          <Box position="relative">
+            <button 
+              onClick={() => setIsProfileOpen(!isProfileOpen)} 
+              className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold transition-transform hover:scale-105"
+            >
+              {user?.email[0].toUpperCase()}
+            </button>
+            {isProfileOpen && (
+              <Box position="absolute" top="50px" right="0" width="280px" bg="white" shadow="0 20px 40px rgba(0,0,0,0.15)" border="1px solid #E5E5E5" p={3} borderRadius="16px" className="animate-in fade-in zoom-in-95">
+                <Box mb={2} pb={2} borderBottom="1px solid #F3F3F3">
+                  <Text weight="bold" size={14} className="block truncate">{user?.email}</Text>
+                  <Text variant="label" color="#1023D7" size={10}>{user?.role} node</Text>
+                </Box>
+                <Flex direction="column" gap={1}>
+                  <Box p={2} className="hover:bg-gray-50 cursor-pointer rounded-lg flex items-center gap-3" onClick={() => { onNavItemClick('Settings'); setIsProfileOpen(false); }}>
+                    <SettingsIcon size={16} />
+                    <Text size={13}>Intelligence Controls</Text>
+                  </Box>
+                  <Box p={2} className="hover:bg-red-50 text-red-600 cursor-pointer rounded-lg flex items-center gap-3" onClick={onLogout}>
+                    <LogOut size={16} />
+                    <Text size={13} weight="bold">Log Out</Text>
+                  </Box>
+                </Flex>
+              </Box>
+            )}
+          </Box>
+        </Flex>
+      </Flex>
+    </Box>
   );
 };
 

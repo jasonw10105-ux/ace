@@ -17,7 +17,9 @@ import SearchOverlay from './components/SearchOverlay';
 import WaitlistPage from './components/WaitlistPage';
 import ArtistInsights from './components/ArtistInsights';
 import { LiveArtAdvisor } from './components/LiveArtAdvisor';
-import CollectionRoadmapPage from './components/CollectionRoadmapPage'; // Production Import
+import CollectionRoadmapPage from './components/CollectionRoadmapPage';
+import { FavoritesPage } from './components/FavoritesPage';
+import { Calendar } from './components/Calendar';
 
 import { AuthFlow } from './components/AuthFlow';
 import { Dashboard } from './components/Dashboard';
@@ -35,8 +37,8 @@ import { ViewingRoom } from './components/ViewingRoom';
 import { RecoveryFlow } from './components/Recovery';
 import { AuthProvider } from './contexts/AuthProvider';
 import { logger } from './services/logger';
-import { Artwork, UserProfile, UserRole } from './types';
-import toast from 'react-hot-toast';
+import { Artwork, UserProfile } from './types';
+import { FlowProvider } from './flow';
 
 const AppContent: React.FC<{ 
   user: UserProfile | null; 
@@ -55,16 +57,11 @@ const AppContent: React.FC<{
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
       if (error) throw error;
       setUser(data as UserProfile);
     } catch (e) {
-      logger.error('Failed to sync neural profile', e as Error);
+      logger.error('Neural profile sync failed', e as Error);
     }
   }, [setUser]);
 
@@ -79,10 +76,6 @@ const AppContent: React.FC<{
     return () => subscription.unsubscribe();
   }, [fetchProfile, setUser]);
 
-  const handleAuthComplete = (email: string, role: UserRole) => {
-    navigate('/dashboard');
-  };
-
   const toggleComparison = (artwork: Artwork) => {
     setComparisonQueue(prev => {
       const exists = prev.find(a => a.id === artwork.id);
@@ -94,23 +87,13 @@ const AppContent: React.FC<{
 
   const handleNavItemClick = (item: string) => {
     const routeMap: Record<string, string> = {
-      'Dashboard': '/dashboard',
-      'My Artworks': '/artworks',
-      'Upload New': '/upload-new',
-      'Create Catalogue': '/create-catalogue',
-      'Sales Overview': '/sales',
-      'Market Trends': '/explore',
-      'Frontier Network': '/artists',
-      'Lead Intelligence': '/crm',
-      'Vault': '/vault',
-      'Settings': '/settings',
-      'Social': '/community',
-      'Analytics': '/analytics',
-      'Taste Matches': '/advisor',
-      'Roadmap': '/roadmap' // Added Roadmap mapping
+      'Dashboard': '/dashboard', 'My Artworks': '/artworks', 'Upload New': '/upload-new',
+      'Create Catalogue': '/create-catalogue', 'Sales Overview': '/sales', 'Market Trends': '/explore',
+      'Frontier Network': '/artists', 'Lead Intelligence': '/crm', 'Vault': '/vault',
+      'Settings': '/settings', 'Social': '/community', 'Analytics': '/analytics',
+      'Taste Matches': '/advisor', 'Roadmap': '/roadmap', 'Saved Works': '/favorites', 'Calendar': '/calendar'
     };
-    const route = routeMap[item] || `/${item.replace(/\s+/g, '-').toLowerCase()}`;
-    navigate(route);
+    navigate(routeMap[item] || `/${item.replace(/\s+/g, '-').toLowerCase()}`);
   };
 
   return (
@@ -146,32 +129,31 @@ const AppContent: React.FC<{
             <Route path="/recovery" element={<RecoveryFlow onBack={() => navigate('/auth')} onComplete={() => navigate('/dashboard')} />} />
             <Route path="/analytics" element={user ? <ArtistInsights artistId={user.id} onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
             <Route path="/compare" element={<ArtworkComparison artworks={comparisonQueue} onRemove={(id) => setComparisonQueue(prev => prev.filter(a => a.id !== id))} onBack={() => navigate(-1)} />} />
-            <Route path="/auth" element={<AuthFlow onComplete={handleAuthComplete} onBackToHome={() => navigate('/')} />} />
+            <Route path="/auth" element={<AuthFlow onComplete={() => navigate('/dashboard')} onBackToHome={() => navigate('/')} />} />
             <Route path="/onboarding" element={user ? <TasteOnboarding artworks={[]} onComplete={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-            <Route path="/dashboard" element={user ? <Dashboard user={user} onAction={(v) => typeof v === 'string' ? navigate(`/${v}`) : navigate('/artwork/1')} /> : <Navigate to="/auth" />} />
+            <Route path="/dashboard" element={user ? <Dashboard user={user} onAction={() => navigate('/artworks')} /> : <Navigate to="/auth" />} />
             <Route path="/roadmap" element={user ? <CollectionRoadmapPage onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+            <Route path="/favorites" element={user ? <FavoritesPage onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+            <Route path="/calendar" element={user ? <Calendar onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
             <Route path="/vault" element={user ? (vaultVerified ? <CollectorVault onBack={() => navigate('/dashboard')} /> : <VaultAccess email={user.email} onVerified={() => setVaultVerified(true)} onCancel={() => navigate('/dashboard')} />) : <Navigate to="/auth" />} />
             <Route path="/settings" element={user ? <EnhancedCollectorSettings user={user} onSave={(u) => setUser({...user, ...u})} onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
             <Route path="/sales" element={user ? <Sales user={user} artworks={[]} onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
             <Route path="/crm" element={user ? <ArtistCRM onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-            <Route path="/artwork/:id" element={<ArtworkDetail onClose={() => navigate(-1)} />} />
-            <Route path="/upload-new" element={user?.role === 'artist' || user?.role === 'both' ? <ArtworkCreate onSave={() => { toast.success('Artwork Catalogued'); navigate('/dashboard'); }} onCancel={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-            <Route path="/create-catalogue" element={user?.role === 'artist' || user?.role === 'both' ? <CatalogueCreate onSave={() => { toast.success('Catalogue Published'); navigate('/dashboard'); }} onCancel={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+            <Route path="/artwork/:id" element={<ArtworkDetail />} />
+            <Route path="/upload-new" element={user?.role === 'artist' || user?.role === 'both' ? <ArtworkCreate onSave={() => navigate('/dashboard')} onCancel={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+            <Route path="/create-catalogue" element={user?.role === 'artist' || user?.role === 'both' ? <CatalogueCreate onSave={() => navigate('/dashboard')} onCancel={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+            <Route path="/viewing-room/:id" element={<ViewingRoom />} />
+            <Route path="/advisor" element={<LiveArtAdvisor onBack={() => navigate('/dashboard')} />} />
           </Routes>
           <ComparisonBar queue={comparisonQueue} onRemove={(id) => setComparisonQueue(prev => prev.filter(a => a.id !== id))} onClear={() => setComparisonQueue([])} onCompare={() => navigate('/compare')} />
         </NavigationProvider>
       )}
 
-      {isAdvisorActive && (
+      {(isAdvisorActive || isViewingRoom) && (
          <Routes>
             <Route path="/advisor" element={<LiveArtAdvisor onBack={() => navigate('/dashboard')} />} />
+            <Route path="/viewing-room/:id" element={<ViewingRoom />} />
          </Routes>
-      )}
-
-      {isViewingRoom && (
-        <Routes>
-          <Route path="/viewing-room/:id" element={<ViewingRoom />} />
-        </Routes>
       )}
     </AuthProvider>
   );
@@ -184,12 +166,13 @@ const App: React.FC = () => {
     await supabase.auth.signOut();
     setUser(null);
     setVaultVerified(false);
-    localStorage.removeItem('artflow_user');
   };
   return (
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <AppContent user={user} setUser={setUser} logout={logout} vaultVerified={vaultVerified} setVaultVerified={setVaultVerified} />
-    </BrowserRouter>
+    <FlowProvider>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <AppContent user={user} setUser={setUser} logout={logout} vaultVerified={vaultVerified} setVaultVerified={setVaultVerified} />
+      </BrowserRouter>
+    </FlowProvider>
   );
 };
 
