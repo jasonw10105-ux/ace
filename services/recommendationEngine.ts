@@ -12,13 +12,17 @@ class RecommendationEngine {
   async getPersonalizedRecommendations(userId: string, limit: number = 6) {
     const context = contextualBandit.getCurrentContext(userId);
     
-    // In a production environment, we fetch from Supabase.
-    // If MOCK_ARTWORKS is empty, we hit the DB.
+    // 1. Fetch Candidates (Prioritizing metadata completeness)
     let pool = MOCK_ARTWORKS;
     if (pool.length === 0) {
-      const { data, error } = await supabase.from('artworks').select('*').limit(100);
+      const { data, error } = await supabase
+        .from('artworks')
+        .select('*')
+        .eq('status', 'available')
+        .limit(200);
+        
       if (error) {
-        console.error("DB Signal Lost during recommendation phase.");
+        console.error("Neural Signal Interrupted during pool acquisition.");
         return [];
       }
       pool = (data as Artwork[]) || [];
@@ -26,16 +30,15 @@ class RecommendationEngine {
 
     if (pool.length === 0) return [];
 
-    // 1. Bandit Filtering (Exploration vs Exploitation)
+    // 2. Bandit Filtering (Personalized Ranking)
     const arms = pool.map(art => contextualBandit.artworkToArm(art));
     const banditResults = await contextualBandit.getRecommendations(context, arms, limit);
     
-    // 2. High-Fidelity Semantic Enrichment via Gemini
+    // 3. Narrative Synthesis via Gemini
     const enriched = await Promise.all(banditResults.map(async res => {
       const artwork = pool.find(a => a.id === res.artworkId);
       if (!artwork) return null;
 
-      // Generate the personal "why" narrative
       const aiExplanation = await geminiService.generateRecommendationNarrative(artwork, context);
       
       return {

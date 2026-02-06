@@ -12,7 +12,9 @@ import {
   ShieldAlert,
   CheckCircle2,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  Zap,
+  Shield
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { validateEmail, validatePassword } from '../utils/validation';
@@ -53,12 +55,12 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
     }
 
     if (!authRateLimiter.isAllowed(email)) {
-      toast.error('Too many requests. Please wait a few minutes.');
+      toast.error('Signal frequency exceeded. Please wait 15 minutes.');
       return;
     }
 
     setIsLoading(true);
-    // Supabase resetPasswordForEmail sends a recovery signal
+    // Supabase resetPasswordForEmail sends the recovery token/OTP
     const { error } = await supabase.auth.resetPasswordForEmail(email);
     
     if (error) {
@@ -79,7 +81,7 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
     }
     
     setIsLoading(true);
-    // Verifying the OTP for recovery type
+    // Verifying the OTP specifically for the 'recovery' type
     const { error } = await supabase.auth.verifyOtp({
       email,
       token: otp,
@@ -87,7 +89,7 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
     });
 
     if (error) {
-      toast.error('Neural key rejected. Please check your token.');
+      toast.error('Neural key rejected. Verify your token.');
     } else {
       toast.success('Identity Verified');
       setStep('reset');
@@ -116,7 +118,7 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
     }
 
     setIsLoading(true);
-    // Since the user is authenticated via verifyOtp recovery flow, we update the user password
+    // promotional session from verifyOtp allows password update
     const { error } = await supabase.auth.updateUser({ password });
 
     if (error) {
@@ -135,11 +137,23 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
           onClick={onBack} 
           className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-black transition-colors group"
         >
-          <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> Exit Flow
+          <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> Back to Login
         </button>
       </div>
 
       <div className="max-w-md w-full space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        {/* Synthesis Progress (Visual Only) */}
+        <div className="flex justify-center gap-2 mb-4">
+           {['request', 'verify', 'reset', 'success'].map((s, idx) => (
+             <div 
+              key={s} 
+              className={`h-1 w-12 rounded-full transition-all duration-700 ${
+                ['request', 'verify', 'reset', 'success'].indexOf(step) >= idx ? 'bg-black' : 'bg-gray-100'
+              }`} 
+             />
+           ))}
+        </div>
+
         {step === 'request' && (
           <div className="space-y-8">
             <div className="text-center">
@@ -147,7 +161,7 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
                 <Mail size={40} />
               </div>
               <h1 className="text-5xl font-serif font-bold italic tracking-tighter mb-4">Access Reset.</h1>
-              <p className="text-gray-400 font-light text-lg">Enter your email identity to trigger a recovery signal across the frontier.</p>
+              <p className="text-gray-400 font-light text-lg">Enter your registry email to trigger a recovery signal.</p>
             </div>
 
             <form onSubmit={handleRequestOTP} className="space-y-6">
@@ -168,7 +182,7 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
                 className="w-full bg-black text-white py-5 rounded-[1.5rem] font-bold uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-3 disabled:opacity-30"
               >
                 {isLoading ? <Cpu className="animate-spin" size={20} /> : 'Request Reset Token'}
-                {!isLoading && <ArrowRight size={20} />}
+                {!isLoading && <Zap size={18} className="text-blue-400" />}
               </button>
             </form>
           </div>
@@ -227,7 +241,7 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
               <div className="w-24 h-24 bg-purple-50 rounded-[2.5rem] flex items-center justify-center text-purple-500 mx-auto mb-8 shadow-inner border border-purple-100">
                 <Lock size={40} />
               </div>
-              <h1 className="text-5xl font-serif font-bold italic tracking-tighter mb-4">Synthesis.</h1>
+              <h1 className="text-5xl font-serif font-bold italic tracking-tighter mb-4">Resynthesis.</h1>
               <p className="text-gray-400 font-light text-lg">Define a new high-fidelity access key for your identity.</p>
             </div>
 
@@ -300,13 +314,13 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
             </div>
             <div>
               <h1 className="text-6xl font-serif font-bold italic tracking-tighter mb-4">Aligned.</h1>
-              <p className="text-gray-400 font-light max-w-xs mx-auto leading-relaxed text-lg">Your neural access has been successfully restored. You can now enter the dashboard with your new credentials.</p>
+              <p className="text-gray-400 font-light max-w-xs mx-auto leading-relaxed text-lg">Your neural access has been successfully restored.</p>
             </div>
             <button 
               onClick={onComplete}
-              className="w-full bg-black text-white py-5 rounded-[1.5rem] font-bold uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-black/10"
+              className="w-full bg-black text-white py-5 rounded-[1.5rem] font-bold uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-2"
             >
-              Enter Dashboard
+              Enter Dashboard <ArrowRight size={18} />
             </button>
           </div>
         )}
@@ -314,10 +328,10 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
         {step !== 'success' && (
           <div className="flex items-start gap-4 p-5 bg-gray-50 rounded-[2rem] border border-gray-100 mt-12">
             <div className="p-2 bg-white rounded-xl shadow-sm text-blue-500 shrink-0">
-               <ShieldAlert size={18} />
+               <Shield size={18} />
             </div>
             <p className="text-[10px] text-gray-500 leading-relaxed uppercase font-bold tracking-widest">
-              Security Protocol: <span className="font-light text-gray-400 lowercase">Identity tokens are valid for 15 minutes. All recovery signals are end-to-end encrypted across the ArtFlow mesh network.</span>
+              Security Protocol: <span className="font-light text-gray-400 lowercase italic">Identity tokens are valid for 15 minutes. All recovery signals are end-to-end encrypted.</span>
             </p>
           </div>
         )}

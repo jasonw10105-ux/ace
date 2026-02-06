@@ -51,7 +51,8 @@ const HorizontalFilterSystem: React.FC<HorizontalFilterSystemProps> = ({
     onFilterChange?.(cleared);
   };
 
-  const hasActiveFilters = Object.values(selectedFilters).some(f => f.length > 0);
+  // Add explicit typing to f as string[] to resolve the 'unknown' type error
+  const hasActiveFilters = Object.values(selectedFilters).some((f: string[]) => f.length > 0);
 
   const renderGroup = (title: string, options: FilterOption[], type: string) => (
     <div className="flex flex-col gap-2">

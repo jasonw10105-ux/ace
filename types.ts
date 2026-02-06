@@ -233,6 +233,8 @@ export interface Catalogue {
   profiles?: Profile;
   is_published: boolean;
   isPublic: boolean;
+  isSystem?: boolean; // New: automated ingestion catalogue
+  isUndeletable?: boolean; // New: cannot be removed by user
   access_config: CatalogueAccessConfig; // New viewing room controls
   items: CatalogueItem[];
   branding?: {
@@ -442,4 +444,17 @@ export interface Roadmap {
   progress_percentage?: number
   created_at?: string
   updated_at?: string
+}
+
+export interface ParsedSearchQuery {
+  colors: string[];
+  mediums: string[];
+  styles: string[];
+  maxPrice: number | null;
+  minPrice: number | null;
+  mood: string | null;
+  size: 'small' | 'medium' | 'large' | null;
+  aestheticVectors: string[];
+  intent: 'browse' | 'buy' | 'research';
+  comparative: boolean;
 }

@@ -3,7 +3,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { MOCK_ARTWORKS } from '../constants';
 import ArtCard from './ArtCard';
-import { geminiService, ParsedSearchQuery } from '../services/geminiService';
+import { geminiService } from '../services/geminiService';
+import { ParsedSearchQuery } from '../types';
 import { logger } from '../services/logger';
 import { Brain, Cpu, Target, Camera, Search } from 'lucide-react';
 
@@ -41,7 +42,7 @@ const SearchResultsPage: React.FC = () => {
 
     return MOCK_ARTWORKS.map(art => {
       let score = 0;
-      const scores = { meta: 0, price: 0, chromatic: 0, preference: 0, recency: 0 };
+      const scores = { meta: 0, price: 0, chromatic: 0, preference: 0, recency: 0, subject: 0 };
 
       const styleMatch = parsedEntities.styles.some(s => art.style.toLowerCase().includes(s.toLowerCase()));
       const mediumMatch = parsedEntities.mediums.some(m => art.medium.toLowerCase().includes(m.toLowerCase()));
@@ -54,7 +55,15 @@ const SearchResultsPage: React.FC = () => {
       ).length;
       scores.chromatic = Math.min(25, colorMatches * 8);
 
-      score = scores.meta + scores.price + scores.chromatic + scores.preference + scores.recency;
+      // Subject Matter Scoring
+      const subjectMatches = (parsedEntities.subjects || []).filter(sub => 
+        art.title.toLowerCase().includes(sub.toLowerCase()) || 
+        (art.description && art.description.toLowerCase().includes(sub.toLowerCase())) ||
+        art.tags.some(tag => tag.toLowerCase().includes(sub.toLowerCase()))
+      ).length;
+      scores.subject = Math.min(25, subjectMatches * 10);
+
+      score = scores.meta + scores.price + scores.chromatic + scores.preference + scores.recency + scores.subject;
 
       return { ...art, neuralScore: Math.min(100, score), breakdown: scores };
     })
@@ -111,6 +120,9 @@ const SearchResultsPage: React.FC = () => {
                       ))}
                       {parsedEntities.styles.map(s => (
                         <span key={s} className="px-3 py-1 bg-blue-500/20 text-blue-400 rounded-lg text-[10px] font-bold uppercase tracking-widest border border-blue-500/20">{s}</span>
+                      ))}
+                      {parsedEntities.subjects?.map(sub => (
+                        <span key={sub} className="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-lg text-[10px] font-bold uppercase tracking-widest border border-purple-500/20">{sub}</span>
                       ))}
                    </div>
                 </div>

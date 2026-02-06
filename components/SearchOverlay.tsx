@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { geminiService, SearchSuggestion, ParsedSearchQuery } from '../services/geminiService';
-import { SavedSearch } from '../types';
+import { geminiService, SearchSuggestion } from '../services/geminiService';
+import { ParsedSearchQuery, SavedSearch } from '../types';
 import { trendingSearchService } from '../services/trendingSearch';
-import { Search, Camera, Mic, Sparkles, History, ArrowRight, Zap, TrendingUp, X, MicOff, Cpu, Loader2, Target, Layers, Palette, Brain } from 'lucide-react';
+import { Search, Camera, Mic, Sparkles, History, ArrowRight, Zap, TrendingUp, X, MicOff, Cpu, Loader2, Target, Layers, Palette, Brain, Link as LinkIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface SearchOverlayProps {
@@ -16,6 +16,7 @@ interface SearchOverlayProps {
 
 const SearchOverlay: React.FC<SearchOverlayProps> = ({ onClose, onSearch, savedSearches, onSelectSaved }) => {
   const [query, setQuery] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStage, setProcessingStage] = useState<string>('');
   const [isListening, setIsListening] = useState(false);
@@ -37,7 +38,7 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ onClose, onSearch, savedS
     inputRef.current?.focus();
     trendingSearchService.getTrendingKeywords().then(setTrending);
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitRecognition;
     if (SpeechRecognition) {
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.continuous = false;
@@ -96,6 +97,7 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ onClose, onSearch, savedS
     setProcessingStage('Compressing Neural Signal...');
     return new Promise((resolve) => {
       const img = new Image();
+      img.crossOrigin = "anonymous";
       img.src = base64Str;
       img.onload = () => {
         const canvas = document.createElement('canvas');
@@ -109,6 +111,10 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ onClose, onSearch, savedS
         ctx?.drawImage(img, 0, 0, w, h);
         resolve(canvas.toDataURL('image/jpeg', 0.7));
       };
+      img.onerror = () => {
+        toast.error("Failed to load image for processing.");
+        resolve(base64Str);
+      }
     });
   };
 
@@ -126,6 +132,49 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ onClose, onSearch, savedS
     }
   };
 
+  const handleUrlSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!imageUrl.trim()) return;
+    setIsProcessing(true);
+    setVisualPreview(imageUrl);
+    setProcessingStage('Fetching Remote Asset...');
+    try {
+      // For URLs, we try to convert to base64 if possible or just pass the URL
+      // If we can't proxy it, we'll rely on the model being able to see it or prompt for upload
+      // In this specific browser environment, we'll try to fetch it to get base64
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = reader.result as string;
+        await processVisualSearch(base64);
+      };
+      reader.readAsDataURL(blob);
+    } catch (error) {
+      toast.error("Security policy blocked direct URL analysis. Please upload the file.");
+      setIsProcessing(false);
+      setVisualPreview(null);
+    }
+  };
+
+  const processVisualSearch = async (data: string) => {
+    try {
+      const compressed = await compressAndPrep(data);
+      setProcessingStage('Decoding Aesthetic DNA...');
+      const analysis = await geminiService.visualSearch(compressed);
+      setProcessingStage('Establishing Collective Matches...');
+      if (analysis) {
+        onSearch(analysis, { type: 'visual', data: compressed });
+        navigate('/search?mode=visual', { state: { analysis, visualData: compressed } });
+        onClose();
+      }
+    } catch (error) {
+      toast.error("Spectral synthesis failed.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith('image/')) {
@@ -134,21 +183,7 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ onClose, onSearch, savedS
         const raw = reader.result as string;
         setVisualPreview(raw);
         setIsProcessing(true);
-        try {
-          const compressed = await compressAndPrep(raw);
-          setProcessingStage('Decoding Aesthetic DNA...');
-          const analysis = await geminiService.visualSearch(compressed);
-          setProcessingStage('Establishing Collective Matches...');
-          if (analysis) {
-            onSearch(analysis, { type: 'visual', data: compressed });
-            navigate('/search?mode=visual', { state: { analysis, visualData: compressed } });
-            onClose();
-          }
-        } catch (error) {
-          toast.error("Spectral synthesis failed.");
-        } finally {
-          setIsProcessing(false);
-        }
+        await processVisualSearch(raw);
       };
       reader.readAsDataURL(file);
     }
@@ -162,8 +197,8 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ onClose, onSearch, savedS
 
   const renderActiveSignals = () => {
     if (!liveAnalysis) return null;
-    const { colors, mediums, styles, intent } = liveAnalysis;
-    const hasSignals = colors.length > 0 || mediums.length > 0 || styles.length > 0;
+    const { colors, mediums, styles, subjects } = liveAnalysis;
+    const hasSignals = colors.length > 0 || mediums.length > 0 || styles.length > 0 || (subjects && subjects.length > 0);
     if (!hasSignals) return null;
 
     return (
@@ -186,6 +221,11 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ onClose, onSearch, savedS
              <Target size={8} /> {s}
           </span>
         ))}
+        {subjects?.map(sub => (
+          <span key={sub} className="px-3 py-1 bg-purple-50 text-purple-600 border border-purple-100 rounded-lg text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5">
+             <Brain size={8} /> {sub}
+          </span>
+        ))}
       </div>
     );
   };
@@ -199,11 +239,11 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ onClose, onSearch, savedS
 
         <div className="mb-20">
            <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-500 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-[0.2em] mb-8 border border-blue-100">
-              <Sparkles size={12} /> Spectrum Calibration V.0.4
+              <Sparkles size={12} /> Spectrum Calibration V.0.5
            </div>
            <h2 className="text-7xl font-serif font-bold mb-6 tracking-tight">Speak to the <span className="italic">Engine</span>.</h2>
            <p className="text-2xl text-gray-400 font-light max-w-2xl leading-relaxed">
-             Describe a feeling, a style, or <span className="text-black font-medium">upload a reference</span> to trigger a high-fidelity aesthetic match.
+             Describe a feeling, a style, or <span className="text-black font-medium">upload a visual reference</span> to trigger a high-fidelity match.
            </p>
         </div>
 
@@ -320,9 +360,8 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ onClose, onSearch, savedS
                 <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-400 border-b border-gray-100 pb-4">Aesthetic DNA Match</h3>
                 
                 <div 
-                  onClick={() => !isProcessing && fileInputRef.current?.click()}
-                  className={`relative aspect-[3/4] rounded-[3rem] border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all duration-700 group overflow-hidden ${
-                    visualPreview ? 'border-transparent' : 'border-gray-100 hover:border-blue-200 hover:bg-blue-50/20'
+                  className={`relative aspect-[3/4] rounded-[3rem] border-2 border-dashed flex flex-col items-center justify-center transition-all duration-700 group overflow-hidden ${
+                    visualPreview ? 'border-transparent' : 'border-gray-100'
                   } ${isProcessing ? 'cursor-wait' : ''}`}
                 >
                   {visualPreview ? (
@@ -330,20 +369,54 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ onClose, onSearch, savedS
                       <img src={visualPreview} className={`w-full h-full object-cover transition-opacity duration-500 ${isProcessing ? 'opacity-40 grayscale' : 'opacity-100'}`} alt="Ref" />
                       <div className={`absolute inset-0 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center transition-opacity duration-500 ${isProcessing ? 'opacity-100' : 'opacity-0'}`}>
                          <div className="w-12 h-12 border-4 border-t-white border-white/20 rounded-full animate-spin mb-4"></div>
-                         <p className="text-white font-bold text-[10px] uppercase tracking-widest text-center px-6">Resynthesizing DNA & Calibrating Spectrum...</p>
+                         <p className="text-white font-bold text-[10px] uppercase tracking-widest text-center px-6">{processingStage}</p>
                       </div>
                     </>
                   ) : (
-                    <div className="flex flex-col items-center text-center p-10">
-                       <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                          <Camera className="text-gray-300 group-hover:text-black transition-colors" size={32} />
+                    <div className="flex flex-col items-center text-center p-10 space-y-8">
+                       <div 
+                        onClick={() => !isProcessing && fileInputRef.current?.click()}
+                        className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center cursor-pointer hover:scale-110 transition-transform group-hover:bg-blue-50"
+                       >
+                          <Camera className="text-gray-300 group-hover:text-blue-500 transition-colors" size={32} />
                        </div>
-                       <p className="text-lg font-bold mb-1">Visual Reference</p>
-                       <p className="text-xs text-gray-400 font-light leading-relaxed">Find artworks with similar brushwork and color structures.</p>
+                       <div>
+                          <p className="text-lg font-bold mb-1">Visual Reference</p>
+                          <p className="text-xs text-gray-400 font-light leading-relaxed mb-6">Match similar brushwork and color structures.</p>
+                       </div>
+                       
+                       <form onSubmit={handleUrlSubmit} className="w-full space-y-3">
+                          <div className="relative">
+                             <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={14} />
+                             <input 
+                               type="url" 
+                               placeholder="Paste Image URL..." 
+                               value={imageUrl}
+                               onChange={(e) => setImageUrl(e.target.value)}
+                               className="w-full bg-gray-50 border border-gray-100 rounded-xl pl-10 pr-4 py-3 text-xs outline-none focus:bg-white focus:border-black transition-all"
+                             />
+                          </div>
+                          <button 
+                            type="submit"
+                            disabled={isProcessing || !imageUrl}
+                            className="w-full bg-black text-white py-3 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:scale-105 transition-all disabled:opacity-30"
+                          >
+                             Analyze URL
+                          </button>
+                       </form>
                     </div>
                   )}
                   <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*" />
                 </div>
+                
+                {!visualPreview && (
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full py-4 border-2 border-gray-100 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-black hover:border-black transition-all"
+                  >
+                    Select File to Upload
+                  </button>
+                )}
              </div>
           </div>
         </div>

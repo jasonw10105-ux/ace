@@ -143,7 +143,7 @@ export class ContextualBanditService {
         const isExploration = idx >= numExploit;
         return {
           artworkId: arm.artworkId,
-          confidence: Math.min(1.0, arm.expectedReward + (arm.uncertainty * 0.1)),
+          confidence: Math.min(0.99, arm.expectedReward + (arm.uncertainty * 0.1)),
           reason: isExploration ? 'explore' : 'exploit',
           explanation: "", // Will be filled by Gemini
           expectedReward: arm.expectedReward,
@@ -183,9 +183,14 @@ export class ContextualBanditService {
     const gIdx = genres.indexOf(arm.metadata.genre.toLowerCase());
     if (gIdx >= 0 && gIdx < 5) features[13 + gIdx] = 1;
     
-    // 18-19: Global Velocity & Freshness
-    features[18] = arm.metadata.popularity_score;
-    features[19] = arm.metadata.recency_score;
+    // 18: Preference overlap (Explicit personalized weight)
+    const hasStylePref = context.preferredStyles.some(s => 
+        s.toLowerCase() === arm.metadata.genre.toLowerCase()
+    );
+    features[18] = hasStylePref ? 1.0 : 0.0;
+
+    // 19: Global Velocity & Freshness
+    features[19] = (arm.metadata.popularity_score + arm.metadata.recency_score) / 2;
     
     return features;
   }

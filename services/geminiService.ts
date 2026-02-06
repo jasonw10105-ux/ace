@@ -1,19 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Artwork } from "../types";
-
-export interface ParsedSearchQuery {
-  colors: string[];
-  mediums: string[];
-  styles: string[];
-  maxPrice: number | null;
-  minPrice: number | null;
-  mood: string | null;
-  size: 'small' | 'medium' | 'large' | null;
-  aestheticVectors: string[];
-  intent: 'browse' | 'buy' | 'research';
-  comparative: boolean;
-}
+import { Artwork, ParsedSearchQuery } from "../types";
 
 export interface SearchSuggestion {
   term: string;
@@ -55,6 +42,7 @@ export const geminiService = {
               colors: { type: Type.ARRAY, items: { type: Type.STRING } },
               mediums: { type: Type.ARRAY, items: { type: Type.STRING } },
               styles: { type: Type.ARRAY, items: { type: Type.STRING } },
+              subjects: { type: Type.ARRAY, items: { type: Type.STRING } },
               maxPrice: { type: Type.NUMBER, nullable: true },
               minPrice: { type: Type.NUMBER, nullable: true },
               mood: { type: Type.STRING, nullable: true },
@@ -63,7 +51,7 @@ export const geminiService = {
               intent: { type: Type.STRING, enum: ['browse', 'buy', 'research'] },
               comparative: { type: Type.BOOLEAN }
             },
-            required: ["colors", "mediums", "styles", "aestheticVectors", "intent", "comparative"]
+            required: ["colors", "mediums", "styles", "subjects", "aestheticVectors", "intent", "comparative"]
           }
         }
       });
@@ -112,7 +100,7 @@ export const geminiService = {
         contents: {
           parts: [
             { inlineData: { mimeType: mimeType, data: data } },
-            { text: "Act as a Senior Art Curator. Analyze this image and extract its aesthetic DNA." }
+            { text: "Act as a Senior Art Curator. Analyze this image and extract its aesthetic DNA. Identify colors, style, mediums, and subject matter." }
           ]
         },
         config: {
@@ -123,6 +111,7 @@ export const geminiService = {
               colors: { type: Type.ARRAY, items: { type: Type.STRING } },
               mediums: { type: Type.ARRAY, items: { type: Type.STRING } },
               styles: { type: Type.ARRAY, items: { type: Type.STRING } },
+              subjects: { type: Type.ARRAY, items: { type: Type.STRING } },
               maxPrice: { type: Type.NUMBER, nullable: true },
               minPrice: { type: Type.NUMBER, nullable: true },
               mood: { type: Type.STRING, nullable: true },
@@ -131,7 +120,7 @@ export const geminiService = {
               intent: { type: Type.STRING, enum: ['browse', 'buy', 'research'] },
               comparative: { type: Type.BOOLEAN }
             },
-            required: ["colors", "mediums", "styles", "aestheticVectors", "intent", "comparative"]
+            required: ["colors", "mediums", "styles", "subjects", "aestheticVectors", "intent", "comparative"]
           }
         }
       });
@@ -151,14 +140,16 @@ export const geminiService = {
         Artwork: "${artwork.title}" by ${artwork.artist}. 
         Medium: ${artwork.medium}. 
         Style: ${artwork.style}. 
-        Palette: ${artwork.palette.primary} primary with ${artwork.palette.accents.join(', ')} accents.
+        Tags: ${artwork.tags?.join(', ') || 'Contemporary'}.
+        Valuation: $${artwork.price.toLocaleString()}.
+        Palette: ${artwork.palette.primary} primary.
         
         Collector Context: 
         Preferred Styles: ${context.preferredStyles.join(', ') || 'Emerging'}.
-        Recent Exploration: ${context.recentSearches.join(', ') || 'General Discovery'}.
-        Interaction Volume: ${context.recentViews.length} pieces studied.
+        Recent Discovery: ${context.recentSearches.join(', ') || 'General Abstraction'}.
+        Temporal Context: Discovering in ${context.season} at ${context.timeOfDay}.
         
-        Instruction: Synthesize the connection. Mention specific stylistic overlap or a compelling visual contrast. Keep it under 25 words. Highly sophisticated.`,
+        Instruction: Synthesize the connection. Mention why this piece fits their collection roadmap right now. Use terms like 'chromatic alignment', 'narrative depth', or 'market trajectory'. Keep it under 28 words. Highly sophisticated.`,
       });
       return response.text?.trim().replace(/^"(.*)"$/, '$1') || "A significant aesthetic alignment for your curated roadmap.";
     } catch (error) {

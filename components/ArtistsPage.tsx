@@ -1,14 +1,15 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-// Added missing Link import
 import { Link } from 'react-router-dom';
 import { 
   Users, Search, MapPin, TrendingUp, Globe, Filter, X, Zap, 
   Sparkles, Layout, Palette, Scale, ArrowRight, ArrowLeft, 
-  Check, ChevronDown, Layers, Box
+  Check, ChevronDown, Layers, Box, Target, User, Cpu, Loader2
 } from 'lucide-react';
-import { MOCK_ARTWORKS } from '../constants';
+import { supabase } from '../lib/supabase';
 import { ArtistComparisonView } from './ArtistComparisonView';
-import { Artwork } from '../types';
+import { Artwork, Profile } from '../types';
+import toast from 'react-hot-toast';
 
 interface ArtistIdentity {
   name: string;
@@ -20,7 +21,14 @@ interface ArtistIdentity {
   tags: string[];
   avatar: string;
   growth: string;
-  recentWorks: string[]; // URLs
+  recentWorks: string[]; 
+}
+
+interface Suggestion {
+  id: string;
+  label: string;
+  type: 'artist' | 'style' | 'location';
+  sublabel?: string;
 }
 
 const ArtistsPage: React.FC = () => {
@@ -28,6 +36,8 @@ const ArtistsPage: React.FC = () => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [comparisonQueue, setComparisonQueue] = useState<ArtistIdentity[]>([]);
   const [showComparison, setShowComparison] = useState(false);
+  const [artists, setArtists] = useState<ArtistIdentity[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Filter States
   const [activeLocations, setActiveLocations] = useState<string[]>([]);
@@ -36,64 +46,103 @@ const ArtistsPage: React.FC = () => {
 
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // Synthesize Artist Identities from Global Asset Feed
-  const artists = useMemo<ArtistIdentity[]>(() => {
-    const artistMap = new Map<string, ArtistIdentity>();
-    const locations = ['Toronto, CA', 'Tokyo, JP', 'Oslo, NO', 'New York, US', 'London, UK', 'Berlin, DE'];
-    
-    // In production, this would be a single optimized query to the profiles table
-    MOCK_ARTWORKS.forEach((art, idx) => {
-      if (!artistMap.has(art.artist)) {
-        artistMap.set(art.artist, {
-          name: art.artist,
-          location: locations[idx % locations.length],
-          bio: art.artistBio || `${art.artist} is a leading figure in contemporary ${art.style.toLowerCase()}.`,
-          styles: [art.style],
-          mediums: [art.medium],
-          workCount: 1,
-          tags: art.tags,
-          avatar: `https://picsum.photos/seed/${art.artist}/200`,
-          growth: `+${Math.floor(Math.random() * 40) + 5}%`,
-          recentWorks: [art.imageUrl]
-        });
-      } else {
-        const existing = artistMap.get(art.artist)!;
-        existing.workCount += 1;
-        if (!existing.styles.includes(art.style)) existing.styles.push(art.style);
-        if (!existing.mediums.includes(art.medium)) existing.mediums.push(art.medium);
-        if (existing.recentWorks.length < 3) existing.recentWorks.push(art.imageUrl);
+  // Fetch Artist Identities from Supabase
+  useEffect(() => {
+    const fetchArtists = async () => {
+      setIsLoading(true);
+      try {
+        const { data: profiles, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .or('role.eq.artist,role.eq.both');
+
+        if (error) throw error;
+
+        // Map profiles to ArtistIdentity
+        const mappedArtists: ArtistIdentity[] = (profiles || []).map((p: any) => ({
+          name: p.display_name || p.full_name || 'Anonymous Artist',
+          location: p.location || 'Global Sector',
+          bio: p.bio || 'Exploring new aesthetic frontiers.',
+          styles: p.specialties || ['Contemporary'],
+          mediums: [], // Would ideally come from a join with artworks
+          workCount: 0,
+          tags: [],
+          avatar: p.avatar_url || `https://picsum.photos/seed/${p.id}/200`,
+          growth: `+${Math.floor(Math.random() * 25) + 5}%`,
+          recentWorks: []
+        }));
+
+        setArtists(mappedArtists);
+      } catch (e) {
+        console.error("Failed to sync frontier identities", e);
+        toast.error("Signal interrupt: Failed to load artist directory.");
+      } finally {
+        setIsLoading(false);
       }
-    });
-    
-    return Array.from(artistMap.values());
+    };
+
+    fetchArtists();
   }, []);
 
-  // Compute Filter Options
+  // Compute Filter Options from active dataset
   const filterOptions = useMemo(() => {
     const locs = Array.from(new Set(artists.map(a => a.location))).sort();
     const styles = Array.from(new Set(artists.flatMap(a => a.styles))).sort();
     return { locs, styles };
   }, [artists]);
 
-  // Derived Filtering Logic
+  // Type-ahead Suggestions Logic
+  const suggestions = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (q.length < 2) return [];
+
+    const matches: Suggestion[] = [];
+    const seenLabels = new Set<string>();
+
+    // 1. Artist Matches
+    artists.forEach(a => {
+      if (a.name.toLowerCase().includes(q)) {
+        matches.push({ id: `artist-${a.name}`, label: a.name, type: 'artist', sublabel: a.location });
+      }
+    });
+
+    // 2. Style Matches
+    filterOptions.styles.forEach(s => {
+      if (s.toLowerCase().includes(q) && !seenLabels.has(s)) {
+        matches.push({ id: `style-${s}`, label: s, type: 'style' });
+        seenLabels.add(s);
+      }
+    });
+
+    // 3. Location Matches
+    filterOptions.locs.forEach(l => {
+      if (l.toLowerCase().includes(q) && !seenLabels.has(l)) {
+        matches.push({ id: `loc-${l}`, label: l, type: 'location' });
+        seenLabels.add(l);
+      }
+    });
+
+    return matches.sort((a, b) => {
+        // Prioritize artists, then styles
+        const order = { artist: 0, style: 1, location: 2 };
+        return order[a.type as keyof typeof order] - order[b.type as keyof typeof order];
+    }).slice(0, 8);
+  }, [artists, filterOptions, searchQuery]);
+
+  // Derived Filtering Logic for Grid
   const filteredArtists = useMemo(() => {
     return artists.filter(artist => {
-      const matchesSearch = artist.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          artist.styles.some(s => s.toLowerCase().includes(searchQuery.toLowerCase()));
+      const q = searchQuery.toLowerCase();
+      const matchesSearch = artist.name.toLowerCase().includes(q) ||
+                          artist.styles.some(s => s.toLowerCase().includes(q)) ||
+                          artist.location.toLowerCase().includes(q);
+      
       const matchesLocation = activeLocations.length === 0 || activeLocations.includes(artist.location);
       const matchesStyle = activeStyles.length === 0 || artist.styles.some(s => activeStyles.includes(s));
       
       return matchesSearch && matchesLocation && matchesStyle;
     });
   }, [artists, searchQuery, activeLocations, activeStyles]);
-
-  // Type-ahead Suggestions
-  const suggestions = useMemo(() => {
-    if (searchQuery.length < 2) return [];
-    return artists
-      .filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()))
-      .slice(0, 5);
-  }, [artists, searchQuery]);
 
   const toggleComparison = (artist: ArtistIdentity) => {
     setComparisonQueue(prev => {
@@ -104,9 +153,16 @@ const ArtistsPage: React.FC = () => {
     });
   };
 
-  const handleSuggestionClick = (name: string) => {
-    setSearchQuery(name);
+  const handleSuggestionClick = (s: Suggestion) => {
+    setSearchQuery(s.label);
     setShowSuggestions(false);
+    // If it's a specific style or location, we could also auto-apply the filter
+    if (s.type === 'location' && !activeLocations.includes(s.label)) {
+        setActiveLocations([...activeLocations, s.label]);
+    }
+    if (s.type === 'style' && !activeStyles.includes(s.label)) {
+        setActiveStyles([...activeStyles, s.label]);
+    }
   };
 
   useEffect(() => {
@@ -144,33 +200,43 @@ const ArtistsPage: React.FC = () => {
                   value={searchQuery}
                   onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); }}
                   onFocus={() => setShowSuggestions(true)}
-                  placeholder="Identify artist or specialty..."
+                  placeholder="Identify artist, style, or location..."
                   className="w-full pl-20 pr-12 py-8 bg-white border border-gray-100 rounded-[2rem] text-2xl font-serif italic focus:ring-4 focus:ring-black/5 outline-none transition-all shadow-xl shadow-black/[0.02] placeholder:text-gray-100"
                 />
 
-                {/* Type-ahead Suggestions Dropdown */}
+                {/* Intelligent Type-ahead Dropdown */}
                 {showSuggestions && suggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-4 bg-white border border-gray-100 rounded-[2rem] shadow-2xl overflow-hidden animate-in slide-in-from-top-4 duration-300 z-50">
+                  <div className="absolute top-full left-0 right-0 mt-4 bg-white border border-gray-100 rounded-[2rem] shadow-2xl overflow-hidden animate-in slide-in-from-top-4 duration-300 z-50 ring-1 ring-black/5">
                     <div className="p-4 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
-                       <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Predicted Identities</span>
+                       <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Synthesized Matches</span>
                        <Sparkles size={12} className="text-blue-500" />
                     </div>
-                    {suggestions.map(s => (
-                      <button 
-                        key={s.name}
-                        onClick={() => handleSuggestionClick(s.name)}
-                        className="w-full px-8 py-5 text-left hover:bg-gray-50 flex items-center justify-between group"
-                      >
-                         <div className="flex items-center gap-4">
-                            <img src={s.avatar} className="w-10 h-10 rounded-full object-cover grayscale group-hover:grayscale-0 transition-all" />
-                            <div>
-                               <p className="font-bold text-lg">{s.name}</p>
-                               <p className="text-xs text-gray-400">{s.styles[0]} • {s.location}</p>
-                            </div>
-                         </div>
-                         <ArrowRight size={16} className="text-gray-200 group-hover:text-black group-hover:translate-x-1 transition-all" />
-                      </button>
-                    ))}
+                    <div className="max-h-[400px] overflow-y-auto">
+                        {suggestions.map(s => (
+                          <button 
+                            key={s.id}
+                            onClick={() => handleSuggestionClick(s)}
+                            className="w-full px-8 py-5 text-left hover:bg-gray-50 flex items-center justify-between group transition-colors"
+                          >
+                             <div className="flex items-center gap-4">
+                                <div className={`p-3 rounded-xl transition-colors ${
+                                    s.type === 'artist' ? 'bg-blue-50 text-blue-500 group-hover:bg-blue-500 group-hover:text-white' :
+                                    s.type === 'style' ? 'bg-purple-50 text-purple-500 group-hover:bg-purple-500 group-hover:text-white' :
+                                    'bg-orange-50 text-orange-500 group-hover:bg-orange-500 group-hover:text-white'
+                                }`}>
+                                   {s.type === 'artist' && <User size={18} />}
+                                   {s.type === 'style' && <Target size={18} />}
+                                   {s.type === 'location' && <MapPin size={18} />}
+                                </div>
+                                <div>
+                                   <p className="font-bold text-lg leading-tight group-hover:text-black">{s.label}</p>
+                                   <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{s.type}{s.sublabel ? ` • ${s.sublabel}` : ''}</p>
+                                </div>
+                             </div>
+                             <ArrowRight size={16} className="text-gray-200 group-hover:text-black group-hover:translate-x-1 transition-all" />
+                          </button>
+                        ))}
+                    </div>
                   </div>
                 )}
              </div>
@@ -240,95 +306,84 @@ const ArtistsPage: React.FC = () => {
        </div>
 
        {/* Artist Grid */}
-       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
-          {filteredArtists.length > 0 ? filteredArtists.map((artist) => {
-            const isInQueue = comparisonQueue.some(a => a.name === artist.name);
-            return (
-              <div key={artist.name} className="group bg-white border border-gray-100 p-10 rounded-[3.5rem] shadow-sm hover:shadow-2xl transition-all duration-700 relative overflow-hidden flex flex-col">
+       {isLoading ? (
+           <div className="py-40 flex flex-col items-center justify-center space-y-4">
+               <div className="relative">
+                  <div className="w-20 h-20 border-4 border-gray-100 border-t-blue-500 rounded-full animate-spin"></div>
+                  <Cpu className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-500 animate-pulse" />
+               </div>
+               <p className="text-sm font-bold uppercase tracking-widest text-gray-400">Synchronizing Identity Feed...</p>
+           </div>
+       ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
+            {filteredArtists.length > 0 ? filteredArtists.map((artist) => {
+                const isInQueue = comparisonQueue.some(a => a.name === artist.name);
+                return (
+                <div key={artist.name} className="group bg-white border border-gray-100 p-10 rounded-[3.5rem] shadow-sm hover:shadow-2xl transition-all duration-700 relative overflow-hidden flex flex-col">
+                    <button 
+                    onClick={() => toggleComparison(artist)}
+                    className={`absolute top-8 right-8 p-3 rounded-2xl transition-all z-20 ${isInQueue ? 'bg-black text-white' : 'bg-gray-50 text-gray-300 hover:text-black hover:bg-gray-100'}`}
+                    >
+                    <Scale size={20} />
+                    </button>
+
+                    <div className="flex flex-col items-center text-center mb-10 relative">
+                    <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-xl relative z-10 mb-6 bg-gray-50">
+                        <img src={artist.avatar} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000" />
+                    </div>
+                    <h3 className="text-4xl font-serif font-bold italic mb-2 tracking-tight group-hover:text-blue-600 transition-colors">{artist.name}</h3>
+                    <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">
+                        <MapPin size={12} className="text-blue-400" /> {artist.location}
+                    </div>
+                    </div>
+
+                    <div className="flex-1 space-y-6 mb-10">
+                    <div className="flex flex-wrap justify-center gap-2">
+                        {artist.styles.slice(0, 3).map(s => (
+                        <span key={s} className="px-3 py-1 bg-gray-50 text-[9px] font-black uppercase tracking-widest text-gray-400 rounded-lg border border-gray-100">{s}</span>
+                        ))}
+                    </div>
+                    <p className="text-sm text-gray-500 leading-relaxed font-light line-clamp-3 text-center italic">"{artist.bio}"</p>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-gray-50 pt-8 mt-auto">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center text-green-500">
+                            <TrendingUp size={18} />
+                        </div>
+                        <div className="text-left">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase leading-none mb-1">Velocity</p>
+                            <p className="font-mono font-bold text-green-600">{artist.growth}</p>
+                        </div>
+                    </div>
+                    <Link 
+                        to={`/artist/${artist.name.toLowerCase().replace(/\s+/g, '-')}`}
+                        className="bg-black text-white px-8 py-4 rounded-2xl font-bold text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-2"
+                    >
+                        Enter Studio
+                    </Link>
+                    </div>
+                </div>
+                );
+            }) : (
+                <div className="col-span-full py-40 text-center space-y-8 bg-gray-50 rounded-[4rem] border-2 border-dashed border-gray-100">
+                <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm">
+                    <Users size={32} className="text-gray-200" />
+                </div>
+                <div>
+                    <p className="text-2xl font-serif italic text-gray-300 mb-2">Zero alignment detected across the collective.</p>
+                    <p className="text-sm text-gray-400 font-light">Try relaxing your discovery parameters.</p>
+                </div>
                 <button 
-                  onClick={() => toggleComparison(artist)}
-                  className={`absolute top-8 right-8 p-3 rounded-2xl transition-all z-20 ${isInQueue ? 'bg-black text-white' : 'bg-gray-50 text-gray-300 hover:text-black hover:bg-gray-100'}`}
+                    onClick={() => { setActiveLocations([]); setActiveStyles([]); setSearchQuery(''); }}
+                    className="px-8 py-3 bg-black text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:scale-105 transition-all"
                 >
-                  <Scale size={20} />
+                    Recalibrate Lens
                 </button>
-
-                <div className="flex flex-col items-center text-center mb-10 relative">
-                  <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-xl relative z-10 mb-6">
-                     <img src={artist.avatar} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000" />
-                  </div>
-                  <h3 className="text-4xl font-serif font-bold italic mb-2 tracking-tight group-hover:text-blue-600 transition-colors">{artist.name}</h3>
-                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">
-                     <MapPin size={12} className="text-blue-400" /> {artist.location}
-                  </div>
                 </div>
-
-                {/* Portfolio Preview Synthesis */}
-                <div className="mb-10 space-y-4">
-                   <div className="flex items-center justify-between px-1">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-300">Signal Preview</span>
-                      <span className="text-[10px] font-mono font-bold text-blue-500">{artist.workCount} Assets</span>
-                   </div>
-                   <div className="grid grid-cols-3 gap-2">
-                      {artist.recentWorks.map((url, i) => (
-                        <div key={i} className="aspect-square rounded-2xl overflow-hidden bg-gray-50 border border-gray-100">
-                           <img src={url} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all duration-700" alt="Work Preview" />
-                        </div>
-                      ))}
-                      {artist.recentWorks.length < 3 && Array(3 - artist.recentWorks.length).fill(0).map((_, i) => (
-                        <div key={i} className="aspect-square rounded-2xl border-2 border-dashed border-gray-50 flex items-center justify-center text-gray-100">
-                           <Box size={20} />
-                        </div>
-                      ))}
-                   </div>
-                </div>
-
-                <div className="flex-1 space-y-6 mb-10">
-                  <div className="flex flex-wrap justify-center gap-2">
-                    {artist.styles.slice(0, 3).map(s => (
-                      <span key={s} className="px-3 py-1 bg-gray-50 text-[9px] font-black uppercase tracking-widest text-gray-400 rounded-lg border border-gray-100">{s}</span>
-                    ))}
-                  </div>
-                  <p className="text-sm text-gray-500 leading-relaxed font-light line-clamp-3 text-center italic">"{artist.bio}"</p>
-                </div>
-
-                <div className="flex items-center justify-between border-t border-gray-50 pt-8 mt-auto">
-                   <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center text-green-500">
-                         <TrendingUp size={18} />
-                      </div>
-                      <div className="text-left">
-                         <p className="text-[10px] font-bold text-gray-400 uppercase leading-none mb-1">Velocity</p>
-                         <p className="font-mono font-bold text-green-600">{artist.growth}</p>
-                      </div>
-                   </div>
-                   {/* Fixed: Link component is now correctly imported */}
-                   <Link 
-                    to={`/artist/${artist.name.toLowerCase().replace(/\s+/g, '-')}`}
-                    className="bg-black text-white px-8 py-4 rounded-2xl font-bold text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-2"
-                   >
-                     Enter Studio
-                   </Link>
-                </div>
-              </div>
-            );
-          }) : (
-            <div className="col-span-full py-40 text-center space-y-8 bg-gray-50 rounded-[4rem] border-2 border-dashed border-gray-100">
-               <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm">
-                  <Users size={32} className="text-gray-200" />
-               </div>
-               <div>
-                 <p className="text-2xl font-serif italic text-gray-300 mb-2">Zero alignment detected across the collective.</p>
-                 <p className="text-sm text-gray-400 font-light">Try relaxing your discovery parameters.</p>
-               </div>
-               <button 
-                onClick={() => { setActiveLocations([]); setActiveStyles([]); setSearchQuery(''); }}
-                className="px-8 py-3 bg-black text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:scale-105 transition-all"
-               >
-                 Recalibrate Lens
-               </button>
-            </div>
-          )}
-       </div>
+            )}
+        </div>
+       )}
 
        {/* Comparison Bar */}
        {comparisonQueue.length > 0 && (

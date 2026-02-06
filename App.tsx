@@ -187,7 +187,7 @@ const App: React.FC = () => {
     localStorage.removeItem('artflow_user');
   };
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AppContent user={user} setUser={setUser} logout={logout} vaultVerified={vaultVerified} setVaultVerified={setVaultVerified} />
     </BrowserRouter>
   );

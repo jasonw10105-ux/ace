@@ -26,7 +26,7 @@ export const NeuralRecommendationRail: React.FC<NeuralRecommendationRailProps> =
                 <div className="w-1 h-1 bg-blue-400 rounded-full animate-pulse delay-75"></div>
                 <div className="w-1 h-1 bg-blue-300 rounded-full animate-pulse delay-150"></div>
              </div>
-             Synthesis Module Active
+             Curatorial Engine Synchronized
           </div>
           <h2 className="text-5xl font-serif font-bold italic tracking-tight mb-2">{title}</h2>
           <p className="text-gray-400 text-lg font-light leading-relaxed max-w-xl">{subtitle}</p>
@@ -46,7 +46,7 @@ export const NeuralRecommendationRail: React.FC<NeuralRecommendationRailProps> =
                   : 'bg-white text-blue-600 border-blue-50'
                }`}>
                  {rec.reason === 'explore' ? <Sparkles size={10} /> : <Target size={10} />}
-                 {rec.reason === 'explore' ? 'Aesthetic Drift' : `${rec.matchConfidence}% Neural Affinity`}
+                 {rec.reason === 'explore' ? 'Aesthetic Drift' : `${rec.matchConfidence}% Neural Match`}
                </div>
             </div>
             
@@ -60,11 +60,14 @@ export const NeuralRecommendationRail: React.FC<NeuralRecommendationRailProps> =
             
             <div className="mt-6 px-3 relative">
                <div className="absolute -left-2 top-0 bottom-0 w-[1px] bg-gray-100 group-hover:bg-blue-200 transition-colors"></div>
-               <p className="text-xs text-gray-500 italic font-serif leading-relaxed line-clamp-3">
+               <p className="text-[11px] text-gray-500 italic font-serif leading-relaxed line-clamp-3">
                  "{rec.explanation}"
                </p>
-               <div className="mt-3 flex items-center gap-2 text-[8px] font-bold uppercase tracking-widest text-gray-300">
-                  <Activity size={8} /> Decoded Identity Factor
+               <div className="mt-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-[8px] font-bold uppercase tracking-widest text-gray-300">
+                     <Activity size={8} className="text-blue-400" /> Interaction Weighted
+                  </div>
+                  <span className="text-[8px] font-mono text-gray-400 uppercase">#{rec.artwork.style}</span>
                </div>
             </div>
           </div>
@@ -74,7 +77,7 @@ export const NeuralRecommendationRail: React.FC<NeuralRecommendationRailProps> =
                 <Zap size={24} className="text-gray-200" />
              </div>
              <p className="text-2xl font-serif italic text-gray-200 mb-2">Insufficient Signal Volume.</p>
-             <p className="text-xs text-gray-400 font-light max-w-xs">Browse more works to calibrate the personalized discovery engine.</p>
+             <p className="text-xs text-gray-400 font-light max-w-xs">Browse the gallery to calibrate your personalized neural map.</p>
           </div>
         )}
       </div>

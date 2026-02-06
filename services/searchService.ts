@@ -1,8 +1,9 @@
 
 import { supabase } from '../lib/supabase';
-import { geminiService, ParsedSearchQuery } from './geminiService';
+// ParsedSearchQuery is not exported from geminiService, it should be imported from types
+import { geminiService } from './geminiService';
 import { MOCK_ARTWORKS } from '../constants';
-import { Artwork } from '../types';
+import { Artwork, ParsedSearchQuery } from '../types';
 
 export interface ScoredArtwork extends Artwork {
   relevanceScore: number;
