@@ -6,10 +6,14 @@ import {
   Trash2, User, Lock, Shield, Mail, Clock, Bell, Brain, Palette, 
   TrendingUp, BarChart3, Download, Camera, Eye, Heart, 
   Target, Sparkles, Zap, Globe, FileText, ArrowLeft, Loader2,
-  Activity
+  Activity, Instagram, Twitter, Linkedin, Link as LinkIcon,
+  X, RefreshCw, AlertCircle
 } from 'lucide-react';
-import { UserProfile, LearnedPreferences } from '../types';
+import { UserProfile, SocialLinks } from '../types';
+import { geminiService } from '../services/geminiService';
+import { GoogleGenAI } from "@google/genai";
 import toast from 'react-hot-toast';
+import { Box, Flex, Text, Button, Input, Separator } from '../flow';
 
 interface EnhancedCollectorSettingsProps {
   user: UserProfile;
@@ -20,7 +24,14 @@ interface EnhancedCollectorSettingsProps {
 export const EnhancedCollectorSettings: React.FC<EnhancedCollectorSettingsProps> = ({ user, onSave, onBack }) => {
   const [activeTab, setActiveTab] = useState<'account' | 'ai-intelligence' | 'notifications' | 'preferences' | 'security'>('account');
   const [isSaving, setIsSaving] = useState(false);
-  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const [isSynthesizingBio, setIsSynthesizingBio] = useState(false);
+  const [isResettingDNA, setIsResettingDNA] = useState(false);
+  
+  // Learned interests state
+  const [learnedInterests, setLearnedInterests] = useState<string[]>([
+    'Minimalist Abstraction', 'High-Tension Red', 'Berlin Brutalism', 
+    'Cyber-Realism', 'Textural Linen', 'Large Scale', 'Monochrome Oils'
+  ]);
 
   const [formData, setFormData] = useState({
     fullName: user.full_name || '',
@@ -28,14 +39,44 @@ export const EnhancedCollectorSettings: React.FC<EnhancedCollectorSettingsProps>
     location: user.location || '',
     bio: user.bio || '',
     email: user.email || '',
-    preferredMediums: user.preferences?.favoriteMediums.join(', ') || '',
-    preferredStyles: user.preferences?.favoriteStyles.join(', ') || '',
+    website: user.website || '',
+    social_links: user.social_links || { instagram: '', twitter: '', linkedin: '' } as SocialLinks,
+    preferredMediums: user.preferences?.favoriteMediums?.join(', ') || '',
+    preferredStyles: user.preferences?.favoriteStyles?.join(', ') || '',
     minBudget: user.preferences?.priceRange?.[0] || 0,
     maxBudget: user.preferences?.priceRange?.[1] || 10000,
-    notifyByEmail: true,
-    notifyPriceDrops: true,
-    notifyNewWorks: true
   });
+
+  const handleSynthesizeBio = async () => {
+    setIsSynthesizingBio(true);
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Generate a sophisticated, Artsy-style professional bio for an art world participant. Name: ${formData.fullName}. Location: ${formData.location}. Interests: ${formData.preferredStyles}. Keep it under 60 words.`,
+      });
+      const generatedBio = response.text || '';
+      setFormData(prev => ({ ...prev, bio: generatedBio.trim() }));
+      toast.success('Bio synthesized by Neural Engine');
+    } catch (e) {
+      toast.error('Synthesis interrupt');
+    } finally {
+      setIsSynthesizingBio(false);
+    }
+  };
+
+  const handleRemoveInterest = (interest: string) => {
+    setLearnedInterests(prev => prev.filter(i => i !== interest));
+    toast.success(`Signal disconnected: ${interest}`);
+  };
+
+  const handleResetDNA = async () => {
+    setIsResettingDNA(true);
+    await new Promise(r => setTimeout(r, 1500));
+    setLearnedInterests([]);
+    setIsResettingDNA(false);
+    toast.success('Aesthetic DNA Purged. System recalibrating...');
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -44,11 +85,14 @@ export const EnhancedCollectorSettings: React.FC<EnhancedCollectorSettingsProps>
       display_name: formData.displayName,
       location: formData.location,
       bio: formData.bio,
+      website: formData.website,
+      social_links: formData.social_links,
       preferences: {
         ...user.preferences,
         favoriteMediums: formData.preferredMediums.split(',').map(s => s.trim()).filter(Boolean),
         favoriteStyles: formData.preferredStyles.split(',').map(s => s.trim()).filter(Boolean),
-        priceRange: [formData.minBudget, formData.maxBudget]
+        priceRange: [formData.minBudget, formData.maxBudget],
+        learnedInterests // Save the refined interests
       }
     };
 
@@ -64,26 +108,19 @@ export const EnhancedCollectorSettings: React.FC<EnhancedCollectorSettingsProps>
     }
   };
 
-  const aiPerf = user.learned_preferences?.ai_performance || {
-    recommendation_accuracy: 0.92,
-    discovery_success_rate: 0.78,
-    learning_velocity: 0.85,
-    total_interactions: 420
-  };
-
   const TabButton = ({ id, label, icon: Icon, desc }: { id: typeof activeTab, label: string, icon: any, desc: string }) => (
     <button
       onClick={() => setActiveTab(id)}
-      className={`w-full p-6 text-left rounded-3xl border-2 transition-all flex items-center gap-6 group ${
-        activeTab === id ? 'bg-black border-black text-white shadow-xl' : 'bg-white border-transparent hover:border-gray-100 text-gray-400'
+      className={`w-full p-6 text-left rounded-sm border transition-all flex items-center gap-6 group ${
+        activeTab === id ? 'bg-black border-black text-white shadow-xl' : 'bg-white border-gray-100 text-gray-400 hover:border-black hover:text-black'
       }`}
     >
-      <div className={`p-4 rounded-2xl transition-colors ${activeTab === id ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-50 text-gray-300'}`}>
-         <Icon size={20} />
+      <div className={`p-3 rounded-sm transition-colors ${activeTab === id ? 'bg-white/10 text-white' : 'bg-gray-50 text-gray-400'}`}>
+         <Icon size={18} />
       </div>
       <div className="flex-1">
-         <p className="font-bold text-sm uppercase tracking-widest leading-none mb-1">{label}</p>
-         <p className="text-[10px] opacity-60 leading-tight">{desc}</p>
+         <p className="font-bold text-xs uppercase tracking-widest leading-none mb-1">{label}</p>
+         <p className="text-[10px] opacity-60 leading-tight font-mono">{desc}</p>
       </div>
     </button>
   );
@@ -92,153 +129,190 @@ export const EnhancedCollectorSettings: React.FC<EnhancedCollectorSettingsProps>
     <div className="max-w-7xl mx-auto px-6 py-32 animate-in fade-in duration-700">
       <Helmet><title>Settings | ArtFlow Intelligence</title></Helmet>
       
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-16">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-16 border-b border-gray-200 pb-12">
         <div>
-          <button onClick={onBack} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-black mb-4 flex items-center gap-2 group transition-colors">
-            <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> Collector Hub
+          <button onClick={onBack} className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-black mb-4 flex items-center gap-2 group transition-colors">
+            <ArrowLeft size={14} /> Back to Hub
           </button>
-          <h1 className="text-6xl font-serif font-bold italic tracking-tight">Intelligence Controls.</h1>
+          <h1 className="text-6xl font-serif font-bold italic tracking-tight">Identity Spectrum.</h1>
         </div>
-        <button 
+        <Button 
           onClick={handleSave} 
           disabled={isSaving}
-          className="bg-black text-white px-10 py-5 rounded-2xl font-bold text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-black/10 flex items-center gap-2 disabled:opacity-30"
+          size="lg"
+          className="shadow-2xl"
         >
-          {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Zap size={16} />}
-          {isSaving ? 'Encrypting...' : 'Save Synthesis'}
-        </button>
+          {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Zap size={16} className="mr-2" />}
+          {isSaving ? 'Resynthesizing...' : 'Save Changes'}
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-        <div className="lg:col-span-4 space-y-3">
-          <TabButton id="account" label="Identity" icon={User} desc="Profile and origin credentials" />
-          <TabButton id="ai-intelligence" label="AI Synthesis" icon={Brain} desc="Neural taste and behavior map" />
-          <TabButton id="notifications" label="Signals" icon={Bell} desc="Alerts and loop frequencies" />
-          <TabButton id="preferences" label="Vectors" icon={Palette} desc="Style and budget parameters" />
-          <TabButton id="security" label="Privacy" icon={Shield} desc="Data rights and vault security" />
-          
-          <div className="mt-12 p-8 bg-gray-900 rounded-[2.5rem] text-white relative overflow-hidden">
-             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl"></div>
-             <p className="text-[10px] font-bold uppercase tracking-widest text-blue-400 mb-4">Neural Health</p>
-             <div className="flex items-center gap-4 mb-4">
-                <div className="w-16 h-16 rounded-full border-4 border-blue-500 border-t-white flex items-center justify-center">
-                   <span className="font-bold text-xl">96</span>
-                </div>
-                <div className="text-sm font-light text-gray-400">Your profile is <span className="text-white font-bold">fully calibrated</span> with current market shifts.</div>
-             </div>
-          </div>
+        <div className="lg:col-span-4 space-y-2">
+          <TabButton id="account" label="Identity" icon={User} desc="Public Origin Data" />
+          <TabButton id="ai-intelligence" label="Aesthetic DNA" icon={Brain} desc="Learned Match Calibration" />
+          <TabButton id="notifications" label="Signal Flow" icon={Bell} desc="Loop frequencies" />
+          <TabButton id="preferences" label="Market Vectors" icon={Palette} desc="Buy parameters" />
+          <TabButton id="security" label="Encryption" icon={Shield} desc="Vault Access" />
         </div>
 
         <div className="lg:col-span-8">
-          <div className="bg-white border border-gray-100 rounded-[3rem] p-12 shadow-sm min-h-[600px]">
+          <Box bg="white" border="1px solid #E5E5E5" p={8} borderRadius="2px" minHeight="600px">
             {activeTab === 'account' && (
-              <div className="space-y-10 animate-in slide-in-from-right-4">
-                <div className="flex items-center gap-10">
-                  <div className="w-32 h-32 rounded-full bg-gray-50 border-4 border-white shadow-xl flex items-center justify-center text-4xl font-serif font-bold text-gray-200 overflow-hidden relative group cursor-pointer">
-                    {user.avatar_url ? <img src={user.avatar_url} className="w-full h-full object-cover" alt="Avatar" /> : user.email[0].toUpperCase()}
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                       <Camera size={24} className="text-white" />
+              <div className="space-y-12 animate-in fade-in duration-500">
+                <div className="flex items-center gap-12 border-b border-gray-50 pb-12">
+                  <div className="w-32 h-32 bg-gray-50 border border-gray-200 shadow-sm flex items-center justify-center overflow-hidden relative group cursor-pointer">
+                    {user.avatar_url ? <img src={user.avatar_url} className="w-full h-full object-cover" alt="Avatar" /> : <Text variant="h1" color="#DDD">{user.email?.[0]?.toUpperCase()}</Text>}
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                       <Camera size={20} className="text-white" />
                     </div>
                   </div>
-                  <div>
-                    <h3 className="text-3xl font-serif font-bold italic mb-2">Visual ID</h3>
-                    <p className="text-sm text-gray-400 font-light max-w-xs">Your aesthetic signature is visible to the studios you interact with.</p>
+                  <div className="space-y-2">
+                    <Text variant="label" color="#999">Visual ID</Text>
+                    <Text variant="h2" weight="normal" italic className="block">Registry Representation</Text>
+                    <Text size={12} color="#707070" className="block font-mono">Profile completions: 84%</Text>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Display Identity</label>
-                    <input type="text" value={formData.displayName} onChange={e => setFormData({...formData, displayName: e.target.value})} className="w-full px-6 py-4 bg-gray-50 rounded-2xl focus:bg-white outline-none border border-transparent focus:border-black transition-all" />
+                    <Text variant="label" color="#000">Legal Identity</Text>
+                    <input type="text" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} className="w-full px-4 py-4 bg-gray-50 border-none focus:ring-1 focus:ring-black outline-none transition-all font-sans text-sm" placeholder="Full Name" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Primary Location</label>
-                    <input type="text" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full px-6 py-4 bg-gray-50 rounded-2xl focus:bg-white outline-none border border-transparent focus:border-black transition-all" />
+                    <Text variant="label" color="#000">Geo Sector</Text>
+                    <input type="text" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full px-4 py-4 bg-gray-50 border-none focus:ring-1 focus:ring-black outline-none transition-all font-sans text-sm" placeholder="City, Country" />
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Curation Thesis / Bio</label>
-                  <textarea value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} rows={5} className="w-full px-8 py-6 bg-gray-50 rounded-[2rem] focus:bg-white outline-none border border-transparent focus:border-black transition-all resize-none font-light leading-relaxed shadow-inner" placeholder="Tell us about your collecting journey..." />
+                <div className="space-y-4">
+                  <Flex justify="between" align="center">
+                    <Text variant="label" color="#000">Curatorial Narrative</Text>
+                    <button 
+                      onClick={handleSynthesizeBio}
+                      disabled={isSynthesizingBio}
+                      className="text-[10px] font-black uppercase tracking-widest text-blue-600 flex items-center gap-2 hover:opacity-70 disabled:opacity-30"
+                    >
+                      {isSynthesizingBio ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12} />}
+                      Neural Assist
+                    </button>
+                  </Flex>
+                  <textarea value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} rows={5} className="w-full px-6 py-6 bg-gray-50 border-none focus:ring-1 focus:ring-black outline-none transition-all resize-none font-serif italic text-lg leading-relaxed shadow-inner" placeholder="The narrative that defines your frontier..." />
+                </div>
+
+                <div className="space-y-8 pt-8 border-t border-gray-50">
+                  <Text variant="label" color="#000">External Handshakes</Text>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="flex items-center gap-4 bg-gray-50 p-4 border border-transparent focus-within:border-black transition-all">
+                       <Instagram size={18} className="text-gray-400" />
+                       <input type="text" value={formData.social_links.instagram} onChange={e => setFormData({...formData, social_links: {...formData.social_links, instagram: e.target.value}})} className="bg-transparent border-none outline-none text-xs w-full" placeholder="Instagram Username" />
+                    </div>
+                    <div className="flex items-center gap-4 bg-gray-50 p-4 border border-transparent focus-within:border-black transition-all">
+                       <Twitter size={18} className="text-gray-400" />
+                       <input type="text" value={formData.social_links.twitter} onChange={e => setFormData({...formData, social_links: {...formData.social_links, twitter: e.target.value}})} className="bg-transparent border-none outline-none text-xs w-full" placeholder="Twitter/X Handle" />
+                    </div>
+                    <div className="flex items-center gap-4 bg-gray-50 p-4 border border-transparent focus-within:border-black transition-all">
+                       <Linkedin size={18} className="text-gray-400" />
+                       <input type="text" value={formData.social_links.linkedin} onChange={e => setFormData({...formData, social_links: {...formData.social_links, linkedin: e.target.value}})} className="bg-transparent border-none outline-none text-xs w-full" placeholder="LinkedIn Profile" />
+                    </div>
+                    <div className="flex items-center gap-4 bg-gray-50 p-4 border border-transparent focus-within:border-black transition-all">
+                       <LinkIcon size={18} className="text-gray-400" />
+                       <input type="url" value={formData.website} onChange={e => setFormData({...formData, website: e.target.value})} className="bg-transparent border-none outline-none text-xs w-full" placeholder="Professional Website" />
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
 
             {activeTab === 'ai-intelligence' && (
-              <div className="space-y-12 animate-in slide-in-from-right-4">
-                 <div className="grid grid-cols-3 gap-6">
-                    {[
-                      { label: 'Match Accuracy', val: `${Math.round(aiPerf.recommendation_accuracy * 100)}%`, icon: TrendingUp, color: 'text-green-500' },
-                      { label: 'Discovery Velocity', val: `${Math.round(aiPerf.discovery_success_rate * 100)}%`, icon: Zap, color: 'text-blue-500' },
-                      { label: 'Interactions', val: aiPerf.total_interactions, icon: Activity, color: 'text-purple-500' }
-                    ].map(s => (
-                      <div key={s.label} className="p-8 bg-gray-50 rounded-[2rem] border border-gray-100 group hover:border-black transition-all">
-                        <s.icon className={`${s.color} mb-4 group-hover:scale-110 transition-transform`} size={20} />
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">{s.label}</p>
-                        <p className="text-3xl font-serif font-bold italic">{s.val}</p>
+              <div className="space-y-12 animate-in fade-in duration-500">
+                <header className="space-y-2">
+                  <Text variant="h2" italic weight="normal">Aesthetic DNA Refinement</Text>
+                  <Text size={14} color="#707070" className="block leading-relaxed">
+                    The system continuously maps your interaction signals. You can manually refine these weights or remove disconnected interests.
+                  </Text>
+                </header>
+
+                <div className="p-10 bg-gray-50 border border-gray-100 space-y-12">
+                   <div className="space-y-4">
+                      <Flex justify="between" align="end">
+                        <Text variant="label" size={10} color="#999">Discovery Precision</Text>
+                        <Text weight="bold" size={12} font="mono">84% Accurate</Text>
+                      </Flex>
+                      <div className="h-[2px] bg-gray-200 w-full overflow-hidden">
+                        <div className="h-full bg-black w-[84%] transition-all duration-1000"></div>
                       </div>
-                    ))}
-                 </div>
+                   </div>
 
-                 <section>
-                    <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-8 flex items-center gap-2">
-                       <Palette size={14} className="text-blue-500" /> Chromatic Preferences
-                    </h4>
-                    <div className="grid grid-cols-2 gap-4">
-                       {['Warm Neutrals', 'High-Contrast Monochromes'].map(p => (
-                         <div key={p} className="p-6 bg-white border border-gray-100 rounded-2xl flex items-center justify-between">
-                            <span className="font-bold text-sm italic font-serif">{p}</span>
-                            <div className="flex gap-1">
-                               <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                               <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                               <div className="w-2 h-2 rounded-full bg-blue-500/20"></div>
-                            </div>
-                         </div>
-                       ))}
-                    </div>
-                 </section>
+                   <section className="space-y-6">
+                      <Flex justify="between" align="center">
+                        <Text variant="label" color="#000">Learned Interest Vectors</Text>
+                        <button 
+                          onClick={handleResetDNA} 
+                          disabled={isResettingDNA}
+                          className="text-[9px] font-black uppercase tracking-widest text-red-500 flex items-center gap-2 hover:opacity-60 transition-opacity"
+                        >
+                          {isResettingDNA ? <RefreshCw size={10} className="animate-spin" /> : <Trash2 size={10} />}
+                          Purge Neural Map
+                        </button>
+                      </Flex>
+                      
+                      <div className="flex flex-wrap gap-2">
+                        {learnedInterests.length > 0 ? learnedInterests.map(interest => (
+                          <div 
+                            key={interest} 
+                            className="bg-white border border-gray-200 pl-4 pr-2 py-2 rounded-full flex items-center gap-3 group hover:border-black transition-all"
+                          >
+                            <Text size={11} weight="bold" color="#000">{interest}</Text>
+                            <button 
+                              onClick={() => handleRemoveInterest(interest)}
+                              className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                            >
+                              <X size={10} />
+                            </button>
+                          </div>
+                        )) : (
+                          <div className="w-full py-12 text-center border-2 border-dashed border-gray-200 rounded-3xl">
+                            <Brain size={32} className="mx-auto text-gray-200 mb-4" />
+                            <Text size={13} color="#999" italic>No active interests mapped. Interactions will populate this feed.</Text>
+                          </div>
+                        )}
+                      </div>
+                   </section>
 
-                 <section>
-                    <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-8 flex items-center gap-2">
-                       <Clock size={14} className="text-blue-500" /> Behavioral Intelligence
-                    </h4>
-                    <div className="space-y-4">
-                       <div className="flex justify-between items-center p-6 bg-gray-50 rounded-2xl">
-                          <span className="text-sm font-bold">Peak Signal Window</span>
-                          <span className="text-xs font-mono uppercase font-bold">11:00 PM - 02:00 AM EST</span>
-                       </div>
-                       <div className="flex justify-between items-center p-6 bg-gray-50 rounded-2xl">
-                          <span className="text-sm font-bold">Average Study Time</span>
-                          <span className="text-xs font-mono uppercase font-bold">8.4 Minutes / Asset</span>
-                       </div>
-                    </div>
-                 </section>
+                   <Separator />
+
+                   <div className="bg-blue-50 border border-blue-100 p-8 rounded-[2rem] flex items-start gap-6">
+                      <Zap className="text-blue-600 shrink-0" size={24} />
+                      <div className="space-y-2">
+                         <Text weight="bold" size={14} color="#1023D7" className="block">Strategy Calibration</Text>
+                         <Text size={13} color="#1023D7" className="block leading-relaxed font-light">
+                            Your <span className="font-bold">Collection Roadmap</span> currently prioritizes minimalist acquisitions. 
+                            The engine will bias results to fit your $5k-$8k tactical segment.
+                         </Text>
+                         <button 
+                          onClick={() => onBack()} 
+                          className="text-[10px] font-black uppercase tracking-widest text-blue-600 border-b border-blue-200 pb-0.5 hover:border-blue-600 transition-all mt-2"
+                         >
+                           View Active Roadmap
+                         </button>
+                      </div>
+                   </div>
+                </div>
+
+                <div className="bg-white border border-red-100 p-8 rounded-[2rem] flex items-start gap-6">
+                   <AlertCircle className="text-red-500 shrink-0" size={24} />
+                   <div className="space-y-1">
+                      <Text weight="bold" size={14} color="#C82828" className="block">Privacy Guard</Text>
+                      <Text size={12} color="#707070" className="block leading-relaxed">
+                         Interests are only visible to your private account and used to calibrate the 
+                         <span className="font-bold italic"> Advisor</span>. They are never shared with artists or 3rd parties.
+                      </Text>
+                   </div>
+                </div>
               </div>
             )}
-
-            {activeTab === 'security' && (
-              <div className="space-y-12 animate-in slide-in-from-right-4">
-                 <section className="space-y-6">
-                    <h3 className="text-2xl font-serif font-bold italic">Identity Export</h3>
-                    <p className="text-gray-500 leading-relaxed font-light">Download an encrypted package of your entire interaction history, acquired documentation, and aesthetic DNA mapping.</p>
-                    <button className="flex items-center gap-2 px-8 py-4 bg-gray-50 rounded-2xl text-xs font-bold uppercase tracking-widest hover:bg-black hover:text-white transition-all">
-                       <Download size={16} /> Request Secure Archive
-                    </button>
-                 </section>
-
-                 <div className="pt-12 border-t border-gray-100">
-                    <h3 className="text-2xl font-serif font-bold italic text-red-500 mb-6">Danger Protocol</h3>
-                    <div className="p-8 bg-red-50 rounded-[2.5rem] border border-red-100 flex items-center justify-between">
-                       <div>
-                          <h4 className="font-bold text-red-900 mb-1">Delete Neural Signature</h4>
-                          <p className="text-sm text-red-700 opacity-70">Permanently erase all taste profiles and collection history. This cannot be undone.</p>
-                       </div>
-                       <button className="px-8 py-4 bg-red-500 text-white rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-red-600 shadow-xl shadow-red-500/20">Deactivate ID</button>
-                    </div>
-                 </div>
-              </div>
-            )}
-          </div>
+          </Box>
         </div>
       </div>
     </div>

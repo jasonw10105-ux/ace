@@ -1,23 +1,18 @@
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { geminiService } from '../services/geminiService';
 import toast from 'react-hot-toast';
 import { 
-  ArrowLeft, Save, Camera, Trash2, Tag, Layers, Lock, Globe, ShieldCheck, Zap, 
-  Plus, Brain, Loader2, FileText, Palette, DollarSign, Eye, EyeOff, Unlock,
-  ChevronUp, ChevronDown, Star
+  ArrowLeft, Camera, Trash2, Layers, 
+  Plus, Loader2, FileText, DollarSign, 
+  Ruler, X, ChevronRight, Zap, Target,
+  TrendingUp, Activity, Info, BarChart3,
+  ShieldCheck, Brain, Palette, History,
+  Sparkles, UploadCloud, CheckCircle, MessageSquare
 } from 'lucide-react';
-import { Box, Flex, Text, Button, Input, Separator, Spacer } from '../flow';
-import { ArtworkStatus } from '../types';
-
-interface ArtworkImage {
-  id: string;
-  file: File;
-  preview: string;
-  isPrimary: boolean;
-  order: number;
-}
+import { Box, Flex, Text, Button, Grid, Separator } from '../flow';
+import { Artwork } from '../types';
 
 interface ArtworkCreateProps {
   onSave: (data: any) => void;
@@ -25,360 +20,226 @@ interface ArtworkCreateProps {
 }
 
 const ArtworkCreate: React.FC<ArtworkCreateProps> = ({ onSave, onCancel }) => {
-  const navigate = useNavigate();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [images, setImages] = useState<ArtworkImage[]>([]);
+  const bulkInputRef = useRef<HTMLInputElement>(null);
+  const [draftQueue, setDraftQueue] = useState<Partial<Artwork & { narrativeSeeds?: string[] }>[]>([]);
+  const [activeIndex, setActiveIndex] = useState<number>(-1);
   const [isSaving, setIsSaving] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'basic' | 'details' | 'pricing' | 'visibility'>('basic');
-  const [newTag, setNewTag] = useState('');
+  const [dragActive, setDragActive] = useState(false);
 
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    medium: '',
-    style: '',
-    subject: '',
-    dimensions: { width: 0, height: 0, depth: 0, unit: 'cm' as 'cm' | 'in' },
-    year: new Date().getFullYear(),
-    price: 0,
-    currency: 'USD' as any,
-    status: 'available' as ArtworkStatus,
-    tags: [] as string[],
-    location: '',
-    condition: 'excellent',
-    provenance: '',
-    exhibitionHistory: '',
-    awards: '',
-    isPublic: true,
-    allowInquiries: true,
-    palette: { primary: '', secondary: '', accents: [] as string[] }
-  });
-
-  const handleNeuralAnalysis = async (base64: string) => {
+  const handleBulkUpload = async (files: FileList) => {
     setIsAnalyzing(true);
-    try {
-      const analysis = await geminiService.analyzeArtworkForUpload(base64);
-      if (analysis) {
-        setFormData(prev => ({
-          ...prev,
-          title: prev.title || analysis.title,
-          description: prev.description || analysis.description,
-          medium: prev.medium || analysis.medium,
-          style: prev.style || analysis.style,
-          subject: prev.subject || analysis.subject,
-          tags: Array.from(new Set([...prev.tags, ...analysis.tags])),
-          price: prev.price || analysis.suggestedPrice,
-          palette: analysis.palette
-        }));
-        toast.success('Neural Analysis Complete: Metadata Synced.');
-      }
-    } catch (e) {
-      console.error('Neural Interrupt', e);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const handleImageUpload = useCallback((files: FileList) => {
-    const newImages: ArtworkImage[] = Array.from(files).map((file, index) => ({
-      id: `img-${Date.now()}-${index}`,
-      file,
-      preview: URL.createObjectURL(file),
-      isPrimary: images.length === 0 && index === 0,
-      order: images.length + index
-    }));
+    const loadingToast = toast.loading('Vision Engine Initializing...');
+    const newDrafts: Partial<Artwork & { narrativeSeeds?: string[] }>[] = [];
     
-    setImages(prev => [...prev, ...newImages]);
-
-    if (images.length === 0 && newImages.length > 0) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       const reader = new FileReader();
-      reader.onloadend = () => handleNeuralAnalysis(reader.result as string);
-      reader.readAsDataURL(newImages[0].file);
-    }
-  }, [images.length]);
+      const base64: string = await new Promise((resolve) => {
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      handleImageUpload(e.target.files);
+      // Gemini perceives the image and provides SEEDS, not the final text.
+      const analysis = await geminiService.analyzeArtworkForUpload(base64);
+
+      newDrafts.push({
+        id: `bulk-${Date.now()}-${i}`,
+        title: analysis?.suggestedTitle || `Untitled ${new Date().getFullYear()}`,
+        description: '', // Artist must write this
+        primary_image_url: base64,
+        imageUrl: base64,
+        status: 'draft',
+        price: analysis?.suggestedPrice || 0,
+        style: analysis?.style || '',
+        primary_medium: analysis?.medium || '',
+        year: new Date().getFullYear(),
+        dimensions: { unit: 'cm', width: 0, height: 0 },
+        narrativeSeeds: analysis?.narrativeSeeds || []
+      });
     }
+
+    setDraftQueue(prev => [...prev, ...newDrafts]);
+    if (activeIndex === -1) setActiveIndex(0);
+    toast.success(`Identified ${newDrafts.length} visual assets.`, { id: loadingToast });
+    setIsAnalyzing(false);
   };
 
-  const removeImage = (id: string) => {
-    setImages(prev => {
-      const filtered = prev.filter(img => img.id !== id);
-      if (filtered.length > 0 && !filtered.some(img => img.isPrimary)) {
-        filtered[0].isPrimary = true;
-      }
-      return filtered;
+  const currentDraft = draftQueue[activeIndex];
+
+  const updateCurrentDraft = (updates: Partial<Artwork>) => {
+    setDraftQueue(prev => {
+      const next = [...prev];
+      next[activeIndex] = { ...next[activeIndex], ...updates };
+      return next;
     });
   };
 
-  const setPrimaryImage = (id: string) => {
-    setImages(prev => prev.map(img => ({ ...img, isPrimary: img.id === id })));
-  };
-
-  const reorder = (index: number, direction: 'up' | 'down') => {
-    const newItems = [...images];
-    const target = direction === 'up' ? index - 1 : index + 1;
-    if (target < 0 || target >= newItems.length) return;
-    [newItems[index], newItems[target]] = [newItems[target], newItems[index]];
-    setImages(newItems.map((img, i) => ({ ...img, order: i })));
-  };
-
-  const handleSave = async () => {
+  const handleSaveAll = async () => {
+    if (draftQueue.some(d => !d.description?.trim())) {
+      toast.error("Every asset requires a curatorial statement.");
+      return;
+    }
     setIsSaving(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    onSave({ ...formData, images });
+    await new Promise(r => setTimeout(r, 1500));
+    onSave(draftQueue);
     setIsSaving(false);
+    toast.success('Studio Ledger Synchronized');
   };
+
+  if (activeIndex === -1) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 animate-in fade-in duration-1000">
+        <header className="text-center mb-20 max-w-xl">
+           <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.3em] mb-8">
+              <Sparkles size={14} className="animate-pulse" /> Studio Perception V.2
+           </div>
+           <h1 className="text-8xl font-serif font-bold italic tracking-tighter leading-[0.8] mb-8">Register.</h1>
+           <p className="text-gray-400 text-2xl font-light leading-relaxed">
+             Drop your archives here. Establish <span className="text-black font-medium">provenance</span> and metadata before listing.
+           </p>
+        </header>
+
+        <div 
+          onClick={() => bulkInputRef.current?.click()}
+          className="w-full max-w-3xl aspect-video border-2 border-dashed border-gray-100 rounded-[5rem] flex flex-col items-center justify-center cursor-pointer transition-all hover:border-black bg-gray-50/30 group"
+        >
+           <div className="flex flex-col items-center gap-8">
+              <div className="p-10 rounded-[3rem] bg-white shadow-2xl transition-all group-hover:scale-110">
+                 {isAnalyzing ? <Loader2 size={48} className="animate-spin text-blue-500" /> : <UploadCloud size={48} className="text-gray-200 group-hover:text-black" />}
+              </div>
+              <p className="text-xl font-serif font-bold italic text-gray-400">Drop Files to Sync Studio Ledger</p>
+           </div>
+           <input ref={bulkInputRef} type="file" multiple accept="image/*" className="hidden" onChange={(e) => e.target.files && handleBulkUpload(e.target.files)} />
+        </div>
+        <button onClick={onCancel} className="mt-16 text-[10px] font-black uppercase tracking-[0.4em] text-gray-300 hover:text-black transition-colors">Discard Registry Loop</button>
+      </div>
+    );
+  }
 
   return (
-    <Box maxWidth="1200px" mx="auto" px={2} py={8} className="animate-in fade-in slide-in-from-bottom-2">
-      <Flex justify="between" align="center" mb={10}>
-        <Box>
-          <Button variant="no-border" onClick={onCancel} className="mb-4">
-             <Flex align="center" gap={1}>
-                <ArrowLeft size={16} /> <Text variant="label">Return to Studio</Text>
-             </Flex>
-          </Button>
-          <Flex align="center" gap={2}>
-            <Text variant="h1">Catalog <Text variant="italic">Asset</Text>.</Text>
-            {isAnalyzing && <Brain className="text-blue-500 animate-pulse" size={24} />}
-          </Flex>
-        </Box>
-        <Button size="lg" onClick={handleSave} loading={isSaving} disabled={!formData.title || images.length === 0}>
-           <Save size={18} className="mr-2" /> Sync to Portfolio
-        </Button>
-      </Flex>
+    <div className="flex h-screen overflow-hidden bg-white">
+      {/* Sidebar: Registry Queue */}
+      <aside className="w-96 border-r border-gray-100 flex flex-col bg-gray-50/50 shrink-0">
+        <div className="p-12 border-b border-gray-100">
+           <Text variant="label" color="#999" size={10}>Registry Buffer</Text>
+           <h2 className="text-3xl font-serif font-bold italic">{draftQueue.length} Assets</h2>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+           {draftQueue.map((draft, idx) => (
+             <button key={idx} onClick={() => setActiveIndex(idx)} className={`w-full p-6 rounded-[2rem] flex items-center gap-6 transition-all ${activeIndex === idx ? 'bg-white shadow-xl border border-black' : 'hover:bg-white/50 border border-transparent'}`}>
+                <img src={draft.primary_image_url} className="w-16 h-16 rounded-xl object-cover grayscale" />
+                <div className="text-left">
+                   <p className={`text-sm font-bold truncate ${activeIndex === idx ? 'text-black' : 'text-gray-400'}`}>{draft.title}</p>
+                   <span className="text-[9px] font-black text-gray-300 uppercase">Ready</span>
+                </div>
+             </button>
+           ))}
+        </div>
+        <div className="p-8 bg-white border-t border-gray-100">
+           <Button className="w-full h-16 rounded-2xl" onClick={handleSaveAll} loading={isSaving}>Finalize Studio Ledger</Button>
+        </div>
+      </aside>
 
-      <Flex direction={['column', 'row']} gap={6}>
-        {/* Visual Engine Sidebar */}
-        <Box width={['100%', '380px']} className="shrink-0 space-y-6">
-           <Box bg="#F8F8F8" p={4} borderRadius="16px" border="1px solid #E5E5E5">
-              <Text variant="label" color="#999" className="block mb-4">Master Visuals</Text>
-              
-              {images.length === 0 ? (
-                <Box 
-                  height="300px" 
-                  border="2px dashed #DDD" 
-                  borderRadius="12px" 
-                  display="flex" 
-                  className="flex-col items-center justify-center cursor-pointer hover:bg-white hover:border-black transition-all group"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Camera size={40} className="text-gray-300 group-hover:text-black mb-2" />
-                  <Text weight="bold" size={14}>Upload Masters</Text>
-                  <Text size={12} color="#999">Max 10 assets (JPG/WebP)</Text>
-                </Box>
-              ) : (
-                <Box className="space-y-4">
-                  <Box className="grid grid-cols-2 gap-2">
-                    {images.map((img, idx) => (
-                      <Box key={img.id} position="relative" borderRadius="8px" overflow="hidden" className="group shadow-sm">
-                        <img src={img.preview} className="w-full aspect-square object-cover" alt="Preview" />
-                        <Box position="absolute" top={0.5} right={0.5} className="opacity-0 group-hover:opacity-100 transition-opacity">
-                           <Flex direction="column" gap={0.5}>
-                             <button onClick={() => removeImage(img.id)} className="p-1.5 bg-red-500 text-white rounded-lg"><Trash2 size={12}/></button>
-                             <button onClick={() => setPrimaryImage(img.id)} className={`p-1.5 rounded-lg ${img.isPrimary ? 'bg-black text-white' : 'bg-white text-black'}`}><Star size={12}/></button>
-                           </Flex>
-                        </Box>
-                        <Box position="absolute" bottom={0.5} left={0.5} className="opacity-0 group-hover:opacity-100 transition-opacity">
-                           <Flex gap={0.5}>
-                              <button onClick={() => reorder(idx, 'up')} className="p-1 bg-white/80 rounded"><ChevronUp size={10}/></button>
-                              <button onClick={() => reorder(idx, 'down')} className="p-1 bg-white/80 rounded"><ChevronDown size={10}/></button>
-                           </Flex>
-                        </Box>
-                        {img.isPrimary && <Box position="absolute" top={0.5} left={0.5} bg="black" px={1} borderRadius="2px"><Text color="white" size={8} weight="black">PRIMARY</Text></Box>}
-                      </Box>
-                    ))}
-                    {images.length < 10 && (
-                      <Box 
-                        border="2px dashed #DDD" 
-                        borderRadius="8px" 
-                        className="flex items-center justify-center cursor-pointer hover:bg-white transition-all"
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                         <Plus size={20} className="text-gray-400" />
-                      </Box>
-                    )}
-                  </Box>
-                </Box>
-              )}
-              <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileSelect} />
-           </Box>
+      {/* Main Workspace: Curatorial Center */}
+      <main className="flex-1 overflow-y-auto bg-white p-20">
+         <Box maxWidth="1200px" mx="auto">
+            <header className="mb-16 flex justify-between items-start pb-12 border-b border-gray-100">
+               <div>
+                  <div className="flex items-center gap-3 text-blue-600 font-black text-[10px] uppercase tracking-[0.4em] mb-4">
+                     <Brain size={14} /> Intelligence Synthesis
+                  </div>
+                  <input 
+                    className="text-7xl font-serif font-bold italic tracking-tighter leading-none mb-4 outline-none border-b border-transparent focus:border-black/10 w-full"
+                    value={currentDraft.title}
+                    onChange={e => updateCurrentDraft({ title: e.target.value })}
+                  />
+               </div>
+            </header>
 
-           <Box bg="black" p={4} borderRadius="16px" className="relative overflow-hidden">
-              <Zap size={24} className="text-blue-400 mb-2" />
-              <Text weight="bold" color="white" className="block mb-1">Commercial Discovery</Text>
-              <Text color="#666" size={13}>Neural calibration ensures this asset is surfaced to high-intent collectors in the matching aesthetic spectrum.</Text>
-              <Box position="absolute" top="-20px" right="-20px" width="100px" height="100px" bg="blue-100" borderRadius="full" style={{ opacity: 0.1, filter: 'blur(40px)' }} />
-           </Box>
-        </Box>
+            <Grid cols="1 lg:12" gap={16}>
+               <div className="lg:col-span-7 space-y-12">
+                  <section className="bg-white border border-gray-100 p-12 rounded-[4rem] shadow-sm space-y-8">
+                     <h3 className="text-xs font-black uppercase tracking-[0.4em] text-gray-300 flex items-center gap-3">
+                        <MessageSquare size={16} className="text-blue-500" /> Curatorial Statement
+                     </h3>
+                     
+                     <div className="bg-blue-50 p-8 rounded-[2.5rem] mb-8 border border-blue-100">
+                        <p className="text-[10px] font-black text-blue-600 uppercase mb-4 tracking-widest">Neural Narrative Seeds (Use these to write)</p>
+                        <div className="space-y-4">
+                           {currentDraft.narrativeSeeds?.map((seed, i) => (
+                             <p key={i} className="text-sm font-serif italic text-blue-900/60 leading-relaxed group cursor-pointer hover:text-blue-900" onClick={() => updateCurrentDraft({ description: (currentDraft.description || '') + ' ' + seed })}>
+                                "{seed}"
+                             </p>
+                           ))}
+                        </div>
+                     </div>
 
-        {/* Form Content */}
-        <Box flex={1}>
-           <Box borderBottom="1px solid #E5E5E5" mb={6} className="overflow-x-auto">
-             <Flex gap={4}>
-               {[
-                 { id: 'basic', label: 'Identity', icon: FileText },
-                 { id: 'details', label: 'Heritage', icon: Palette },
-                 { id: 'pricing', label: 'Market', icon: DollarSign },
-                 { id: 'visibility', label: 'Broadcast', icon: Eye }
-               ].map(tab => (
-                 <button
-                   key={tab.id}
-                   onClick={() => setActiveTab(tab.id as any)}
-                   className={`px-4 py-4 border-b-2 font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === tab.id ? 'border-black text-black' : 'border-transparent text-gray-400 hover:text-black'}`}
-                 >
-                   <tab.icon size={14} /> {tab.label}
-                 </button>
-               ))}
-             </Flex>
-           </Box>
+                     <textarea 
+                        className="w-full p-10 bg-gray-50 border-none rounded-[3rem] focus:bg-white focus:ring-1 focus:ring-black transition-all outline-none italic font-serif text-2xl leading-relaxed shadow-inner min-h-[400px]"
+                        value={currentDraft.description}
+                        onChange={e => updateCurrentDraft({ description: e.target.value })}
+                        placeholder="Define the concept, materiality, and emotional intent of this work..."
+                     />
+                  </section>
+               </div>
 
-           <Box minHeight="400px">
-              {activeTab === 'basic' && (
-                <Box className="space-y-6 animate-in slide-in-from-right-1">
-                   <Box className="space-y-2">
-                      <Text variant="label" color="#999">Asset Title *</Text>
-                      <input 
-                        className="w-full text-4xl font-serif italic border-none focus:ring-0 outline-none placeholder:text-gray-100"
-                        placeholder="Untitled Synthesis..."
-                        value={formData.title}
-                        onChange={e => setFormData({...formData, title: e.target.value})}
-                      />
-                   </Box>
-                   <Box className="space-y-2">
-                      <Text variant="label" color="#999">Narrative Description</Text>
-                      <textarea 
-                        className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:bg-white transition-all outline-none min-h-[150px] leading-relaxed"
-                        placeholder="Describe the aesthetic intent..."
-                        value={formData.description}
-                        onChange={e => setFormData({...formData, description: e.target.value})}
-                      />
-                   </Box>
-                   <Flex gap={4}>
-                      <Box flex={1} className="space-y-2">
-                         <Text variant="label" color="#999">Medium *</Text>
-                         <Input value={formData.medium} onChange={e => setFormData({...formData, medium: e.target.value})} placeholder="e.g. Oil on Linen" />
-                      </Box>
-                      <Box flex={1} className="space-y-2">
-                         <Text variant="label" color="#999">Movement / Style</Text>
-                         <Input value={formData.style} onChange={e => setFormData({...formData, style: e.target.value})} placeholder="e.g. Neo-Minimalist" />
-                      </Box>
-                   </Flex>
-                </Box>
-              )}
+               <aside className="lg:col-span-5 space-y-8">
+                  <section className="bg-gray-50 p-12 rounded-[4rem] border border-gray-100 space-y-10">
+                     <h3 className="text-xs font-black uppercase tracking-[0.4em] text-gray-300">Technical Ledger</h3>
+                     <div className="space-y-6">
+                        <div className="space-y-2">
+                           <Text variant="label" color="#999">Primary Medium</Text>
+                           <input className="w-full bg-white border border-gray-200 px-6 py-3 rounded-xl text-sm font-bold" value={currentDraft.primary_medium} onChange={e => updateCurrentDraft({ primary_medium: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                           <Text variant="label" color="#999">Movement Focus</Text>
+                           <input className="w-full bg-white border border-gray-200 px-6 py-3 rounded-xl text-sm font-bold" value={currentDraft.style} onChange={e => updateCurrentDraft({ style: e.target.value })} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                           <div className="space-y-2">
+                              <Text variant="label" color="#999">Width (cm)</Text>
+                              <input type="number" className="w-full bg-white border border-gray-200 px-6 py-3 rounded-xl text-sm font-bold" value={currentDraft.dimensions?.width} onChange={e => updateCurrentDraft({ dimensions: {...currentDraft.dimensions!, width: Number(e.target.value)} })} />
+                           </div>
+                           <div className="space-y-2">
+                              <Text variant="label" color="#999">Height (cm)</Text>
+                              <input type="number" className="w-full bg-white border border-gray-200 px-6 py-3 rounded-xl text-sm font-bold" value={currentDraft.dimensions?.height} onChange={e => updateCurrentDraft({ dimensions: {...currentDraft.dimensions!, height: Number(e.target.value)} })} />
+                           </div>
+                        </div>
+                     </div>
+                  </section>
 
-              {activeTab === 'details' && (
-                <Box className="space-y-6 animate-in slide-in-from-right-1">
-                   <Box className="space-y-4">
-                      <Text variant="label" color="#999">Physical Scale</Text>
-                      <Flex gap={2} align="center">
-                         <input type="number" placeholder="W" className="w-20 p-3 bg-gray-50 rounded-xl outline-none" value={formData.dimensions.width || ''} onChange={e => setFormData({...formData, dimensions: {...formData.dimensions, width: parseFloat(e.target.value)}})} />
-                         <Text color="#CCC">×</Text>
-                         <input type="number" placeholder="H" className="w-20 p-3 bg-gray-50 rounded-xl outline-none" value={formData.dimensions.height || ''} onChange={e => setFormData({...formData, dimensions: {...formData.dimensions, height: parseFloat(e.target.value)}})} />
-                         <select className="p-3 bg-gray-50 rounded-xl font-bold text-xs" value={formData.dimensions.unit} onChange={e => setFormData({...formData, dimensions: {...formData.dimensions, unit: e.target.value as any}})}>
-                            <option value="cm">cm</option>
-                            <option value="in">in</option>
-                         </select>
-                      </Flex>
-                   </Box>
-                   <Separator m={4} />
-                   <Box className="space-y-2">
-                      <Text variant="label" color="#999">Provenance & Heritage</Text>
-                      <textarea 
-                        className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none min-h-[100px]"
-                        placeholder="History of ownership..."
-                        value={formData.provenance}
-                        onChange={e => setFormData({...formData, provenance: e.target.value})}
-                      />
-                   </Box>
-                   <Box className="space-y-2">
-                      <Text variant="label" color="#999">Condition Report</Text>
-                      <select className="w-full p-4 bg-gray-50 rounded-2xl font-bold text-sm outline-none" value={formData.condition} onChange={e => setFormData({...formData, condition: e.target.value})}>
-                         <option value="excellent">Excellent</option>
-                         <option value="very-good">Very Good</option>
-                         <option value="good">Good</option>
-                         <option value="fair">Fair</option>
-                      </select>
-                   </Box>
-                </Box>
-              )}
+                  <section className="bg-black text-white p-12 rounded-[4rem] shadow-2xl relative overflow-hidden group">
+                     <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl group-hover:scale-150 transition-transform"></div>
+                     <h3 className="text-xs font-black uppercase tracking-[0.4em] text-blue-400 mb-8 flex items-center gap-3">
+                        <TrendingUp size={16} /> Market Calibration
+                     </h3>
+                     <div className="space-y-2 mb-10">
+                        <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Recommended Listing Value</p>
+                        <div className="flex items-baseline gap-2">
+                           <span className="text-2xl font-mono text-blue-400">$</span>
+                           <input type="number" className="bg-transparent border-none outline-none text-6xl font-serif italic font-bold w-full" value={currentDraft.price} onChange={e => updateCurrentDraft({ price: Number(e.target.value) })} />
+                        </div>
+                     </div>
+                     <p className="text-xs text-gray-400 italic font-light leading-relaxed">
+                       "Based on recent demand for {currentDraft.style} in the Berlin-Tokyo axis, this valuation aligns with an emerging-to-established transition."
+                     </p>
+                  </section>
 
-              {activeTab === 'pricing' && (
-                <Box className="space-y-8 animate-in slide-in-from-right-1">
-                   <Flex gap={4}>
-                      <Box flex={1} className="space-y-2">
-                         <Text variant="label" color="#999">Target Valuation *</Text>
-                         <Flex bg="#F8F8F8" borderRadius="16px" align="center" px={4}>
-                            <Text weight="bold" color="#999">$</Text>
-                            <input 
-                              type="number" 
-                              className="w-full bg-transparent p-4 outline-none font-mono font-bold text-2xl"
-                              placeholder="0.00"
-                              value={formData.price || ''}
-                              onChange={e => setFormData({...formData, price: parseFloat(e.target.value)})}
-                            />
-                         </Flex>
-                      </Box>
-                      <Box flex={1} className="space-y-2">
-                         <Text variant="label" color="#999">Status</Text>
-                         <select 
-                            className="w-full p-4 h-[64px] bg-gray-50 rounded-2xl font-bold text-sm outline-none border-2 border-transparent focus:border-black transition-all" 
-                            value={formData.status} 
-                            onChange={e => setFormData({...formData, status: e.target.value as any})}
-                         >
-                            <option value="available">available</option>
-                            <option value="sold">sold</option>
-                            <option value="reserved">reserved</option>
-                            <option value="private">private</option>
-                         </select>
-                      </Box>
-                   </Flex>
-                   <Box bg="#F0F7FF" p={4} borderRadius="16px" border="1px solid #C2E0FF">
-                      <Text size={12} color="#1023D7" lineHeight={1.5}>
-                        <Zap size={12} className="inline mr-1" />
-                        Neural pricing insight suggests a valuation between <b>$2,400 - $3,100</b> based on current stylistic demand for {formData.style || 'this movement'}.
-                      </Text>
-                   </Box>
-                </Box>
-              )}
-
-              {activeTab === 'visibility' && (
-                <Box className="space-y-6 animate-in slide-in-from-right-1">
-                   <Box p={6} border="1px solid #E5E5E5" borderRadius="24px" className="bg-gray-50 flex items-center justify-between cursor-pointer" onClick={() => setFormData({...formData, isPublic: !formData.isPublic})}>
-                      <Flex align="center" gap={4}>
-                        <Box p={3} bg="white" borderRadius="12px" shadow="sm">{formData.isPublic ? <Globe size={24}/> : <EyeOff size={24}/>}</Box>
-                        <Box>
-                           <Text weight="bold" className="block">Public Visibility</Text>
-                           <Text size={12} color="#999">{formData.isPublic ? 'Visible to global discovery spectrum' : 'Hidden from public index'}</Text>
-                        </Box>
-                      </Flex>
-                      <Box width="48px" height="24px" borderRadius="full" bg={formData.isPublic ? "black" : "#DDD"} position="relative" className="transition-colors">
-                         <Box width="20px" height="20px" borderRadius="full" bg="white" position="absolute" top="2px" left={formData.isPublic ? "26px" : "2px"} className="transition-all shadow-sm" />
-                      </Box>
-                   </Box>
-
-                   <Box p={6} border="1px solid #E5E5E5" borderRadius="24px" className="bg-gray-50 flex items-center justify-between cursor-pointer" onClick={() => setFormData({...formData, allowInquiries: !formData.allowInquiries})}>
-                      <Flex align="center" gap={4}>
-                        <Box p={3} bg="white" borderRadius="12px" shadow="sm">{formData.allowInquiries ? <Unlock size={24}/> : <Lock size={24}/>}</Box>
-                        <Box>
-                           <Text weight="bold" className="block">Open Negotiations</Text>
-                           <Text size={12} color="#999">{formData.allowInquiries ? 'Collectors can initiate acquisition signal' : 'Direct negotiations disabled'}</Text>
-                        </Box>
-                      </Flex>
-                      <Box width="48px" height="24px" borderRadius="full" bg={formData.allowInquiries ? "black" : "#DDD"} position="relative" className="transition-colors">
-                         <Box width="20px" height="20px" borderRadius="full" bg="white" position="absolute" top="2px" left={formData.allowInquiries ? "26px" : "2px"} className="transition-all shadow-sm" />
-                      </Box>
-                   </Box>
-                </Box>
-              )}
-           </Box>
-        </Box>
-      </Flex>
-    </Box>
+                  <div className="p-10 bg-blue-50 border border-blue-100 rounded-[3rem] space-y-4">
+                     <Flex align="center" gap={3}>
+                        <ShieldCheck size={20} className="text-blue-600" />
+                        <p className="text-[10px] font-black uppercase tracking-widest text-blue-800">Verification Active</p>
+                     </Flex>
+                     <p className="text-sm text-blue-700/60 leading-relaxed italic">
+                       Provenance nodes will be cryptographically established upon synchronization.
+                     </p>
+                  </div>
+               </aside>
+            </Grid>
+         </Box>
+      </main>
+    </div>
   );
 };
 

@@ -1,353 +1,327 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Users, 
-  Tag, 
-  Send, 
-  Filter, 
-  Search, 
-  MoreVertical, 
-  Mail, 
-  Zap, 
-  TrendingUp, 
-  Activity, 
-  Download, 
-  Plus, 
-  ChevronRight, 
-  BookOpen, 
-  Target,
-  Brain,
-  CheckSquare,
-  Square,
-  Clock,
-  ArrowRight,
-  ShieldCheck,
-  Layout
+  Users, Filter, Search, MoreVertical, Zap, 
+  Plus, ChevronRight, ArrowRight, ArrowLeft, ShieldCheck, 
+  DollarSign, Target, Loader2, Mail, MapPin, 
+  Clock, MessageSquare, X, Eye, TrendingUp,
+  Download, Upload, HardDrive, Package, UserCheck
 } from 'lucide-react';
-import { purchaseIntentScoringService } from '../services/purchaseIntentScoring';
-import { Contact, ContactTag, Campaign } from '../types';
+import { purchaseIntentScoringService, IntentAnalysis } from '../services/purchaseIntentScoring';
+import { Contact } from '../types';
+import { Box, Flex, Text, Button, Grid, Separator } from '../flow';
 import toast from 'react-hot-toast';
 
-interface ArtistCRMProps {
-  onBack: () => void;
-}
+type CRMFilter = 'all' | 'owners' | 'buyers' | 'imported';
 
-export const ArtistCRM: React.FC<ArtistCRMProps> = ({ onBack }) => {
-  const [activeTab, setActiveTab] = useState<'audience' | 'tags' | 'campaigns'>('audience');
-  const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
+export const ArtistCRM: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+  const [activeTab, setActiveTab] = useState<CRMFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Mock Audience Data
-  const [contacts, setContacts] = useState<Contact[]>([
-    { id: 'c1', name: 'Julian Rossi', email: 'julian@frontier.art', avatarUrl: 'https://picsum.photos/seed/j1/100', lastActive: '2h ago', tags: ['High Spender', 'VIP'], location: 'Toronto, CA', totalInquiries: 14, totalPurchases: 2, favoriteMedium: 'Oil on Linen' },
-    { id: 'c2', name: 'Sasha Vance', email: 'sasha@vancegallery.co', avatarUrl: 'https://picsum.photos/seed/s2/100', lastActive: '12h ago', tags: ['Abstract Enthusiast', 'New Lead'], location: 'Berlin, DE', totalInquiries: 4, totalPurchases: 0, favoriteMedium: 'Digital Synthesis' },
-    { id: 'c3', name: 'Marcus Thorne', email: 'm.thorne@londonart.net', avatarUrl: 'https://picsum.photos/seed/m3/100', lastActive: '2d ago', tags: ['VIP', 'Minimalist'], location: 'London, UK', totalInquiries: 22, totalPurchases: 5, favoriteMedium: 'Brutalist Sculpture' },
-    { id: 'c4', name: 'Elena Novak', email: 'elena@novak.art', avatarUrl: 'https://picsum.photos/seed/e4/100', lastActive: '45m ago', tags: ['Collector Tier 1'], location: 'NYC, US', totalInquiries: 8, totalPurchases: 1, favoriteMedium: 'Acrylic' },
-  ]);
-
-  const [campaigns] = useState<Campaign[]>([
-    { id: 'camp1', title: 'The Vernal Drop', type: 'catalogue_drop', status: 'sent', targetTags: ['VIP'], sentAt: '2024-05-10', openRate: 84, clickRate: 42, conversionRate: 8 },
-    { id: 'camp2', title: 'Studio Update #12', type: 'newsletter', status: 'draft', targetTags: ['All'], openRate: 0, clickRate: 0, conversionRate: 0 },
-  ]);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [selectedAnalysis, setSelectedAnalysis] = useState<IntentAnalysis | null>(null);
 
   useEffect(() => {
-    const enrichAudience = async () => {
-      const enriched = await Promise.all(contacts.map(async c => {
-        const intent = await purchaseIntentScoringService.calculateIntent(c.id, 'any');
-        return { ...c, intentScore: intent.score, intentLabel: intent.label };
-      }));
-      setContacts(enriched);
-      setIsLoading(false);
-    };
-    enrichAudience();
+    loadLeads();
   }, []);
 
-  const toggleSelectAll = () => {
-    if (selectedContacts.length === contacts.length) setSelectedContacts([]);
-    else setSelectedContacts(contacts.map(c => c.id));
+  const loadLeads = async () => {
+    setIsLoading(true);
+    // Categorized Studio Data
+    const mockContacts: Contact[] = [
+      { id: 'c1', user_id: 'a1', full_name: 'Julian Rossi', email: 'j.rossi@vault.art', purchase_intent_score: 0.92, acquisition_likelihood: 0.9, lead_status: 'critical', source: 'owner', ownedAssets: ['art-101'], tags: ['Collector', 'Berlin'], location: 'Berlin, DE', avatar_url: 'https://picsum.photos/seed/julian/100' },
+      { id: 'c2', user_id: 'a1', full_name: 'Sasha Vance', email: 'sasha@frontier.art', purchase_intent_score: 0.75, acquisition_likelihood: 0.7, lead_status: 'active', source: 'buyer', tags: ['London'], location: 'London, UK', avatar_url: 'https://picsum.photos/seed/sasha/100' },
+      { id: 'c3', user_id: 'a1', full_name: 'Marcus Thorne', email: 'm.thorne@estate.com', purchase_intent_score: 0.45, acquisition_likelihood: 0.4, lead_status: 'dormant', source: 'imported', tags: ['Estate'], location: 'New York, NY', avatar_url: 'https://picsum.photos/seed/marcus/100' },
+      { id: 'c4', user_id: 'a1', full_name: 'Elena List', email: 'e.list@curated.io', purchase_intent_score: 0.88, acquisition_likelihood: 0.85, lead_status: 'critical', source: 'owner', ownedAssets: ['art-102', 'art-105'], tags: ['Legacy'], location: 'Paris, FR', avatar_url: 'https://picsum.photos/seed/elena/100' }
+    ];
+    
+    setContacts(mockContacts);
+    setIsLoading(false);
   };
 
-  const toggleSelect = (id: string) => {
-    setSelectedContacts(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  const handleContactSelect = async (contact: Contact) => {
+    setSelectedContact(contact);
+    const analysis = await purchaseIntentScoringService.calculateIntent(contact.id);
+    setSelectedAnalysis(analysis);
   };
 
-  const filteredContacts = contacts.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    c.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
-
-  const bulkAction = (action: string) => {
-    if (selectedContacts.length === 0) {
-      toast.error('Identify target collectors for this operation.');
-      return;
-    }
-    toast.success(`Broadcasting ${action} to ${selectedContacts.length} neural nodes.`);
-  };
+  const filtered = useMemo(() => {
+    let list = contacts.filter(c => 
+      c.full_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      c.email.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    if (activeTab === 'owners') list = list.filter(c => c.source === 'owner');
+    if (activeTab === 'buyers') list = list.filter(c => c.source === 'buyer');
+    if (activeTab === 'imported') list = list.filter(c => c.source === 'imported');
+    return list;
+  }, [contacts, searchQuery, activeTab]);
 
   return (
-    <div className="min-h-screen bg-[#fafafa] pt-20">
-      <div className="max-w-[1600px] mx-auto flex h-[calc(100vh-80px)] overflow-hidden">
-        
-        {/* Sidebar Nav */}
-        <aside className="w-80 bg-white border-r border-gray-100 p-8 shrink-0 flex flex-col justify-between">
-           <div className="space-y-10">
+    <Box bg="#FFFFFF" minHeight="100vh" pt={24} className="animate-in fade-in duration-700">
+      <div className="max-w-[1700px] mx-auto flex h-[calc(100vh-120px)] overflow-hidden">
+        {/* Studio Sidebar */}
+        <aside className="w-96 bg-white border-r border-gray-100 p-12 shrink-0 flex flex-col justify-between">
+           <div className="space-y-16">
               <div>
-                 <button onClick={onBack} className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 hover:text-black mb-10 flex items-center gap-2 group transition-all">
-                    <ChevronRight className="rotate-180 group-hover:-translate-x-1" size={14} /> Back to Studio
+                 {/* Added ArrowLeft icon from lucide-react */}
+                 <button onClick={onBack} className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-300 hover:text-black mb-12 flex items-center gap-2 group transition-all">
+                    <ArrowLeft size={16} className="group-hover:-translate-x-1" /> Return to Studio
                  </button>
-                 <h1 className="text-4xl font-serif font-bold italic tracking-tight">Neural CRM.</h1>
-                 <p className="text-xs text-gray-400 mt-2 font-light">Managing the collective audience spectrum.</p>
+                 <div className="flex items-center gap-4 mb-6">
+                    <div className="p-3 bg-black text-white rounded-2xl shadow-xl">
+                       <HardDrive size={24} />
+                    </div>
+                    <h1 className="text-6xl font-serif font-bold italic tracking-tighter leading-none">Studio DB.</h1>
+                 </div>
+                 <p className="text-gray-400 text-lg font-light leading-relaxed">Your private register of authenticated collectors and buyers.</p>
               </div>
-
+              
               <nav className="space-y-1">
                  {[
-                   { id: 'audience', label: 'Entire Collective', icon: Users, count: contacts.length },
-                   { id: 'tags', label: 'Vector Groups', icon: Tag, count: 8 },
-                   { id: 'campaigns', label: 'Signal Broadcasts', icon: Send, count: campaigns.length }
-                 ].map(item => (
+                   { id: 'all', label: 'Entire Database', icon: Users, count: contacts.length },
+                   { id: 'owners', label: 'Verified Owners', icon: ShieldCheck, count: contacts.filter(c => c.source === 'owner').length },
+                   { id: 'buyers', label: 'Past Buyers', icon: Package, count: contacts.filter(c => c.source === 'buyer').length },
+                   { id: 'imported', label: 'Hand-Added / Import', icon: Upload, count: contacts.filter(c => c.source === 'imported').length }
+                 ].map(tab => (
                    <button 
-                    key={item.id} 
-                    onClick={() => setActiveTab(item.id as any)}
-                    className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all group ${activeTab === item.id ? 'bg-black text-white shadow-xl' : 'text-gray-500 hover:bg-gray-50'}`}
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id as CRMFilter)}
+                    className={`w-full flex items-center justify-between p-6 rounded-sm transition-all border ${activeTab === tab.id ? 'bg-black border-black text-white shadow-2xl scale-[1.02]' : 'border-transparent text-gray-400 hover:text-black hover:bg-gray-50'}`}
                    >
-                      <div className="flex items-center gap-4">
-                         <item.icon size={18} className={activeTab === item.id ? 'text-blue-400' : 'text-gray-300 group-hover:text-black'} />
-                         <span className="text-sm font-bold">{item.label}</span>
+                      <div className="flex items-center gap-6">
+                        <tab.icon size={18} className={activeTab === tab.id ? 'text-blue-400' : ''} /> 
+                        <span className="text-xs font-bold uppercase tracking-widest">{tab.label}</span>
                       </div>
-                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${activeTab === item.id ? 'bg-white/10' : 'bg-gray-100'}`}>{item.count}</span>
+                      <span className="text-[10px] font-mono opacity-40">{tab.count}</span>
                    </button>
                  ))}
               </nav>
-
-              <div className="space-y-4 pt-10 border-t border-gray-50">
-                 <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-300">Target Segments</h4>
-                 <div className="space-y-2">
-                    {['High-Velocity VIPs', 'Abstract Collectors', 'Digital First'].map(tag => (
-                      <button key={tag} className="w-full flex items-center justify-between text-xs text-gray-400 hover:text-black py-2 transition-colors">
-                         <div className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>
-                            <span>{tag}</span>
-                         </div>
-                         <ChevronRight size={12} />
-                      </button>
-                    ))}
-                 </div>
-              </div>
            </div>
 
-           <div className="p-6 bg-blue-50 rounded-[2rem] border border-blue-100 relative overflow-hidden">
-              <div className="relative z-10">
-                 <h5 className="text-blue-900 font-bold text-[10px] uppercase tracking-widest mb-2 flex items-center gap-2">
-                    <Brain size={12} /> Optimization
-                 </h5>
-                 <p className="text-[11px] text-blue-800/70 leading-relaxed font-light">
-                   Neural signals peak at <span className="font-bold">11:00 PM EST</span> for your VIP segment. 
+           <div className="flex flex-col gap-3">
+              <button 
+               onClick={() => toast('Initializing CSV Link...')}
+               className="w-full py-5 border border-gray-100 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 hover:bg-black hover:text-white transition-all flex items-center justify-center gap-3"
+              >
+                 <Upload size={14} /> Bulk Import Contacts
+              </button>
+              <div className="p-6 bg-gray-50 border border-gray-100 rounded-[2rem] flex items-start gap-4">
+                 <UserCheck size={20} className="text-blue-500 shrink-0" />
+                 <p className="text-[10px] text-gray-400 leading-relaxed uppercase font-bold tracking-widest">
+                   Studio Guard: <span className="font-light italic text-gray-300">This registry is private. Contact data is never used for collective training.</span>
                  </p>
-                 <button className="mt-4 text-[10px] font-bold uppercase tracking-widest text-blue-600 border-b border-blue-200">View Velocity Report</button>
               </div>
            </div>
         </aside>
 
-        {/* Main Content Area */}
-        <main className="flex-1 flex flex-col bg-white overflow-hidden">
-          {/* Top Bar Actions */}
-          <header className="h-28 border-b border-gray-100 px-10 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md sticky top-0 z-50">
-             <div className="flex items-center gap-6 flex-1 max-w-2xl">
-                <div className="relative flex-1">
-                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
-                   <input 
-                    type="text" 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Identify collector by name, vector, or signal..." 
-                    className="w-full pl-12 pr-6 py-4 bg-gray-50 border-none rounded-2xl text-sm focus:bg-white focus:ring-2 focus:ring-black/5 transition-all outline-none" 
-                   />
-                </div>
-                <button className="flex items-center gap-2 px-6 py-4 bg-gray-50 hover:bg-gray-100 rounded-2xl text-gray-400 transition-all font-bold text-xs uppercase tracking-widest border border-gray-100">
-                   <Filter size={14} /> Refine
-                </button>
+        {/* Studio Ledger (Table) */}
+        <main className="flex-1 flex flex-col bg-white overflow-hidden relative">
+          <header className="h-28 border-b border-gray-100 px-16 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md sticky top-0 z-10">
+             <div className="relative flex-1 max-w-xl group">
+                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-black transition-colors" size={18} />
+                <input 
+                  type="text" 
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Filter Studio DB by identity..." 
+                  className="w-full pl-16 pr-6 py-5 bg-gray-50 border-none rounded-none text-xl font-serif italic outline-none focus:bg-white focus:ring-1 focus:ring-black transition-all" 
+                />
              </div>
-
-             <div className="flex items-center gap-4">
-                {selectedContacts.length > 0 && (
-                  <div className="flex items-center gap-2 animate-in slide-in-from-right duration-300 mr-4 pr-4 border-r border-gray-100">
-                     <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">{selectedContacts.length} Selected</span>
-                     <div className="flex gap-2">
-                        <button onClick={() => bulkAction('tag')} className="p-2.5 bg-gray-50 hover:bg-black hover:text-white rounded-xl transition-all" title="Add Vector Tag"><Tag size={16}/></button>
-                        <button onClick={() => bulkAction('catalogue')} className="p-2.5 bg-gray-50 hover:bg-black hover:text-white rounded-xl transition-all" title="Drop Private Catalogue"><BookOpen size={16}/></button>
-                        <button onClick={() => bulkAction('message')} className="p-2.5 bg-black text-white rounded-xl transition-all px-4 flex items-center gap-2 shadow-lg shadow-black/10"><Send size={14}/> <span className="text-[10px] font-bold uppercase tracking-widest">Broadcast</span></button>
-                     </div>
-                  </div>
-                )}
-                <button className="px-8 py-4 bg-black text-white rounded-2xl font-bold text-xs uppercase tracking-widest flex items-center gap-2 hover:scale-105 transition-all shadow-xl shadow-black/10">
-                   <Plus size={18} /> Sync New Identity
+             <div className="flex gap-4">
+                <button className="px-10 py-5 bg-gray-50 text-gray-400 border border-gray-100 rounded-2xl font-bold text-[10px] uppercase tracking-widest hover:bg-black hover:text-white transition-all flex items-center gap-3">
+                   <Download size={16} /> Export Ledger
+                </button>
+                <button className="bg-black text-white px-10 py-5 rounded-2xl font-bold text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-black/20 flex items-center gap-3">
+                   <Plus size={18} /> Add Contact
                 </button>
              </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto">
-            {activeTab === 'audience' && (
-              <div className="p-10">
-                 {isLoading ? (
-                   <div className="py-40 flex flex-col items-center justify-center">
-                      <div className="w-12 h-12 border-4 border-t-black border-black/10 rounded-full animate-spin mb-6"></div>
-                      <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Calibrating Intent Weights...</p>
-                   </div>
-                 ) : (
-                   <table className="w-full text-left border-separate border-spacing-y-4 -mt-4">
-                      <thead>
-                         <tr className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-300">
-                            <th className="px-6 py-4 w-12">
-                               <button onClick={toggleSelectAll} className="hover:text-black transition-colors">
-                                  {selectedContacts.length === contacts.length ? <CheckSquare size={18} className="text-black" /> : <Square size={18} />}
-                               </button>
-                            </th>
-                            <th className="px-6 py-4">Collector Identity</th>
-                            <th className="px-6 py-4">Neural Intent</th>
-                            <th className="px-6 py-4">Vector Tags</th>
-                            <th className="px-6 py-4">Last Active</th>
-                            <th className="px-6 py-4 text-right">Acquisitions</th>
-                            <th className="px-6 py-4 w-12"></th>
-                         </tr>
-                      </thead>
-                      <tbody>
-                         {filteredContacts.map((contact) => (
-                           <tr key={contact.id} className="group hover:bg-white hover:shadow-2xl transition-all duration-500 rounded-3xl overflow-hidden cursor-pointer bg-white">
-                              <td className="px-6 py-8 first:rounded-l-3xl border-y border-transparent">
-                                 <button onClick={(e) => { e.stopPropagation(); toggleSelect(contact.id); }} className="hover:text-blue-500 transition-colors">
-                                    {selectedContacts.includes(contact.id) ? <CheckSquare size={18} className="text-blue-500" /> : <Square size={18} className="text-gray-100 group-hover:text-gray-300" />}
-                                 </button>
-                              </td>
-                              <td className="px-6 py-8 border-y border-transparent">
-                                 <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-xl relative">
-                                       <img src={contact.avatarUrl} className="w-full h-full object-cover" />
-                                       <div className="absolute inset-0 ring-1 ring-black/5 rounded-full"></div>
-                                    </div>
-                                    <div>
-                                       <p className="font-bold text-sm leading-tight mb-1">{contact.name}</p>
-                                       <p className="text-[10px] text-gray-400 font-light truncate max-w-[150px]">{contact.email}</p>
-                                    </div>
-                                 </div>
-                              </td>
-                              <td className="px-6 py-8 border-y border-transparent">
-                                 <div className="flex flex-col gap-1.5">
-                                    <div className="flex items-center gap-2">
-                                       <div className="flex-1 h-1.5 bg-gray-50 rounded-full overflow-hidden w-24">
-                                          <div className={`h-full transition-all duration-1000 ${
-                                             (contact.intentScore || 0) > 80 ? 'bg-red-500' : (contact.intentScore || 0) > 50 ? 'bg-blue-500' : 'bg-gray-200'
-                                          }`} style={{ width: `${contact.intentScore}%` }}></div>
-                                       </div>
-                                       <span className="text-[10px] font-mono font-bold text-gray-400">{contact.intentScore}%</span>
-                                    </div>
-                                    <span className={`text-[8px] font-black uppercase tracking-[0.2em] self-start px-2 py-0.5 rounded ${
-                                       contact.intentLabel === 'Critical' ? 'bg-red-50 text-red-500' : contact.intentLabel === 'High' ? 'bg-blue-50 text-blue-500' : 'bg-gray-50 text-gray-400'
-                                    }`}>{contact.intentLabel} Intent</span>
-                                 </div>
-                              </td>
-                              <td className="px-6 py-8 border-y border-transparent">
-                                 <div className="flex flex-wrap gap-1.5 max-w-[200px]">
-                                    {contact.tags.map(tag => (
-                                      <span key={tag} className="px-2 py-1 bg-gray-50 border border-gray-100 rounded-lg text-[9px] font-bold uppercase tracking-widest text-gray-400">{tag}</span>
-                                    ))}
-                                    <button className="w-6 h-6 rounded-lg bg-gray-50 flex items-center justify-center text-gray-300 hover:text-black transition-colors"><Plus size={10}/></button>
-                                 </div>
-                              </td>
-                              <td className="px-6 py-8 border-y border-transparent">
-                                 <div className="flex items-center gap-2 text-xs text-gray-400">
-                                    <Clock size={12} /> {contact.lastActive}
-                                 </div>
-                              </td>
-                              <td className="px-6 py-8 text-right border-y border-transparent last:rounded-r-3xl">
-                                 <p className="font-mono font-bold text-sm">{contact.totalPurchases}</p>
-                                 <p className="text-[9px] font-bold uppercase tracking-widest text-gray-300">{contact.totalInquiries} Inquiries</p>
-                              </td>
-                              <td className="px-6 py-8 text-right">
-                                 <button className="p-3 hover:bg-gray-50 rounded-xl transition-all text-gray-200 hover:text-black"><MoreVertical size={16}/></button>
-                              </td>
-                           </tr>
-                         ))}
-                      </tbody>
-                   </table>
-                 )}
-              </div>
-            )}
-
-            {activeTab === 'campaigns' && (
-              <div className="p-10 space-y-12">
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    {[
-                      { label: 'Total Signal Reach', value: '4.2k', delta: '+12%', icon: TrendingUp },
-                      { label: 'Avg Open Velocity', value: '72%', delta: '+4%', icon: Activity },
-                      { label: 'Conversion Lift', value: '3.4%', delta: '+0.8%', icon: Zap }
-                    ].map(stat => (
-                      <div key={stat.label} className="p-10 bg-white border border-gray-100 rounded-[3rem] shadow-sm group hover:border-black transition-all">
-                         <div className="flex justify-between items-start mb-6">
-                            <stat.icon className="text-gray-300 group-hover:text-black transition-colors" />
-                            <span className="text-[10px] font-bold px-3 py-1 bg-green-50 text-green-600 rounded-full">{stat.delta}</span>
-                         </div>
-                         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">{stat.label}</p>
-                         <p className="text-4xl font-serif font-bold italic">{stat.value}</p>
-                      </div>
-                    ))}
-                 </div>
-
-                 <div className="bg-white border border-gray-100 rounded-[3rem] overflow-hidden shadow-sm">
-                    <div className="p-10 border-b border-gray-50 flex justify-between items-center">
-                       <h3 className="text-xl font-serif font-bold italic">Broadcast History</h3>
-                       <button className="px-6 py-3 bg-black text-white rounded-2xl font-bold text-xs uppercase tracking-widest shadow-xl shadow-black/10">Initiate New Drop</button>
-                    </div>
-                    <div className="divide-y divide-gray-50">
-                       {campaigns.map(camp => (
-                         <div key={camp.id} className="p-10 flex items-center justify-between hover:bg-gray-50/50 transition-all group">
-                            <div className="flex items-center gap-8 flex-1">
-                               <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center shrink-0 shadow-lg ${
-                                 camp.type === 'catalogue_drop' ? 'bg-blue-500 text-white shadow-blue-500/20' : 'bg-purple-500 text-white shadow-purple-500/20'
-                               }`}>
-                                  {camp.type === 'catalogue_drop' ? <BookOpen size={24}/> : <Mail size={24}/>}
-                               </div>
-                               <div className="space-y-1">
-                                  <h4 className="text-2xl font-serif font-bold italic leading-none mb-2">{camp.title}</h4>
-                                  <div className="flex items-center gap-4">
-                                     <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{camp.type.replace('_', ' ')}</span>
-                                     <div className="flex items-center gap-1.5">
-                                        {camp.targetTags.map(t => (
-                                          <span key={t} className="px-2 py-0.5 bg-gray-100 rounded-full text-[9px] font-bold uppercase tracking-widest text-gray-400">{t}</span>
-                                        ))}
+          <div className="flex-1 overflow-y-auto px-16 py-12 custom-scrollbar">
+             {isLoading ? (
+               <Flex direction="column" align="center" justify="center" height="100%">
+                  <Loader2 className="animate-spin text-black mb-6" size={48} />
+                  <Text variant="label" color="#999" tracking="0.4em">Accessing Studio Archives...</Text>
+               </Flex>
+             ) : (
+               <table className="w-full text-left border-separate border-spacing-y-6">
+                  <thead>
+                     <tr className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-300">
+                        <th className="px-8 pb-4">Identity Node</th>
+                        <th className="px-8 pb-4">Provenance Link</th>
+                        <th className="px-8 pb-4 text-center">Neural Resonance</th>
+                        <th className="px-8 pb-4">Geo Sector</th>
+                        <th className="px-8 pb-4 text-right">Channel</th>
+                     </tr>
+                  </thead>
+                  <tbody>
+                     {filtered.map((c) => (
+                       <tr 
+                        key={c.id} 
+                        onClick={() => handleContactSelect(c)}
+                        className={`group bg-white hover:bg-gray-50 transition-all cursor-pointer border-y border-gray-100 ${selectedContact?.id === c.id ? 'ring-2 ring-black bg-gray-50 scale-[1.01]' : ''}`}
+                       >
+                          <td className="px-8 py-10">
+                             <Flex align="center" gap={8}>
+                                <div className="w-16 h-16 rounded-[2rem] overflow-hidden grayscale group-hover:grayscale-0 transition-all duration-700 shadow-lg border-4 border-white">
+                                   <img src={c.avatar_url} className="w-full h-full object-cover" />
+                                </div>
+                                <div>
+                                   <Text weight="bold" size={20} font="serif" italic className="block mb-1">{c.full_name}</Text>
+                                   <div className="flex items-center gap-2">
+                                      <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${
+                                        c.source === 'owner' ? 'bg-blue-50 text-blue-500' : 
+                                        c.source === 'buyer' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'
+                                      }`}>
+                                        {c.source}
+                                      </span>
+                                      <Text size={11} color="#999" font="mono">{c.email}</Text>
+                                   </div>
+                                </div>
+                             </Flex>
+                          </td>
+                          <td className="px-8 py-10">
+                             <Box>
+                                {c.ownedAssets && c.ownedAssets.length > 0 ? (
+                                  <div className="flex items-center gap-3">
+                                     <div className="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center text-blue-600 border border-blue-50"><Package size={16}/></div>
+                                     <div>
+                                        <p className="text-[10px] font-black text-black uppercase tracking-widest">{c.ownedAssets.length} Assets</p>
+                                        <p className="text-[9px] text-gray-400 font-mono">LOCKED IN VAULT</p>
                                      </div>
                                   </div>
-                               </div>
-                            </div>
-                            
-                            <div className="flex gap-12 text-center">
-                               <div>
-                                  <p className="text-lg font-serif font-bold italic">{camp.openRate}%</p>
-                                  <p className="text-[9px] font-bold uppercase tracking-widest text-gray-300">Opened</p>
-                               </div>
-                               <div>
-                                  <p className="text-lg font-serif font-bold italic">{camp.clickRate}%</p>
-                                  <p className="text-[9px] font-bold uppercase tracking-widest text-gray-300">Clicked</p>
-                               </div>
-                               <div>
-                                  <p className="text-lg font-serif font-bold italic">{camp.conversionRate}%</p>
-                                  <p className="text-[9px] font-bold uppercase tracking-widest text-gray-300">Converted</p>
-                               </div>
-                            </div>
-
-                            <button className="ml-12 p-4 bg-gray-50 text-gray-300 rounded-2xl group-hover:bg-black group-hover:text-white transition-all">
-                               <ArrowRight size={20}/>
-                            </button>
-                         </div>
-                       ))}
-                    </div>
-                 </div>
-              </div>
-            )}
+                                ) : (
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-gray-300 italic">No Provenance</span>
+                                )}
+                             </Box>
+                          </td>
+                          <td className="px-8 py-10">
+                             <Box maxWidth="180px" mx="auto">
+                                <Flex justify="between" align="end" mb={1.5}>
+                                   <span className="text-[10px] font-mono font-bold">{Math.round(c.purchase_intent_score * 100)}%</span>
+                                   <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded tracking-tighter ${
+                                     c.purchase_intent_score > 0.8 ? 'text-blue-600' : 'text-gray-300'
+                                   }`}>High Interaction</span>
+                                </Flex>
+                                <div className="h-0.5 bg-gray-100 w-full overflow-hidden">
+                                   <div 
+                                    className="h-full bg-black transition-all duration-1000" 
+                                    style={{ width: `${c.purchase_intent_score * 100}%` }}
+                                   />
+                                </div>
+                             </Box>
+                          </td>
+                          <td className="px-8 py-10">
+                             <Flex align="center" gap={2} color="#707070">
+                                <MapPin size={14} className="text-blue-500" />
+                                <Text size={14} weight="medium">{c.location}</Text>
+                             </Flex>
+                          </td>
+                          <td className="px-8 py-10 text-right">
+                             <button className="p-4 rounded-2xl hover:bg-black hover:text-white transition-all text-gray-300 hover:shadow-xl group/btn">
+                                <MessageSquare size={20} className="group-hover/btn:scale-110 transition-transform" />
+                             </button>
+                          </td>
+                       </tr>
+                     ))}
+                  </tbody>
+               </table>
+             )}
           </div>
         </main>
+
+        {/* Individual Profile Synthesis */}
+        {selectedContact && selectedAnalysis && (
+          <aside className="w-[550px] bg-white border-l border-gray-100 p-16 overflow-y-auto animate-in slide-in-from-right duration-700">
+             <div className="flex justify-between items-center mb-16">
+                <div className="flex items-center gap-4 text-black font-bold text-[10px] uppercase tracking-[0.5em]">
+                   <UserCheck size={18} className="text-blue-600" /> Studio Identity Profile
+                </div>
+                <button onClick={() => setSelectedContact(null)} className="p-3 hover:bg-gray-50 rounded-full transition-all">
+                   <X size={24} className="text-gray-300" />
+                </button>
+             </div>
+
+             <header className="space-y-10 mb-16">
+                <div className="w-32 h-32 rounded-[2.5rem] overflow-hidden shadow-2xl mb-8 relative group">
+                   <img src={selectedContact.avatar_url} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" />
+                   <div className="absolute inset-0 border-[6px] border-white/20 rounded-[2.5rem]"></div>
+                </div>
+                <div>
+                   <h2 className="text-5xl font-serif font-bold italic tracking-tight">{selectedContact.full_name}</h2>
+                   <div className="flex gap-2 mt-4">
+                      {selectedContact.tags.map(t => (
+                        <span key={t} className="px-3 py-1 bg-gray-50 border border-gray-100 rounded-sm text-[9px] font-black uppercase text-gray-400 tracking-widest">#{t}</span>
+                      ))}
+                   </div>
+                   <p className="text-2xl text-gray-400 font-light italic leading-relaxed mt-10">"{selectedAnalysis.collectorNotes}"</p>
+                </div>
+             </header>
+
+             <section className="space-y-16">
+                <Grid cols={2} gap={6}>
+                   <Box p={8} bg="#F9F9F9" border="1px solid #EEE" borderRadius="2px">
+                      <Text variant="label" color="#999" size={9}>Acquisition Confidence</Text>
+                      <Text size={32} weight="bold" className="block mt-2 font-mono">{Math.round(selectedAnalysis.acquisitionLikelihood * 100)}%</Text>
+                   </Box>
+                   <Box p={8} bg="#F9F9F9" border="1px solid #EEE" borderRadius="2px">
+                      <Text variant="label" color="#999" size={9}>Portfolio Tier</Text>
+                      <Text size={32} weight="bold" className="block mt-2 font-mono">{selectedAnalysis.investmentTier}</Text>
+                   </Box>
+                </Grid>
+
+                <div className="space-y-8 pt-8 border-t border-gray-50">
+                   <Flex align="center" gap={3}>
+                      <Package size={18} className="text-blue-500" />
+                      <Text variant="label" color="#000">Linked Provenance</Text>
+                   </Flex>
+                   <div className="space-y-4">
+                      {selectedContact.ownedAssets?.map(aid => (
+                        <div key={aid} className="flex items-center gap-6 p-6 bg-white border border-gray-100 rounded-2xl group hover:border-black transition-all">
+                           <div className="w-14 h-14 bg-gray-50 rounded-xl overflow-hidden shrink-0">
+                              <img src={`https://picsum.photos/seed/${aid}/100`} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" />
+                           </div>
+                           <div className="flex-1 min-w-0">
+                              <p className="font-bold text-sm truncate">Verified Ownership: #{aid}</p>
+                              <p className="text-[10px] text-gray-400 uppercase font-black tracking-tighter">AUTHENTICATED LEDGER ENTRY</p>
+                           </div>
+                           <ArrowRight size={16} className="text-gray-200 group-hover:text-black" />
+                        </div>
+                      ))}
+                      {(!selectedContact.ownedAssets || selectedContact.ownedAssets.length === 0) && (
+                        <div className="p-8 border-2 border-dashed border-gray-100 text-center rounded-[2rem]">
+                           <p className="text-xs text-gray-300 font-bold uppercase tracking-widest italic">Awaiting First Acquisition</p>
+                        </div>
+                      )}
+                   </div>
+                </div>
+
+                <div className="bg-black text-white p-12 space-y-10 relative overflow-hidden rounded-[3rem] shadow-2xl">
+                   <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl"></div>
+                   <h4 className="text-xs font-bold uppercase tracking-[0.5em] text-blue-400 flex items-center gap-4">
+                      <Zap size={20} className="animate-pulse" /> Studio Action Hub
+                   </h4>
+                   <p className="text-3xl font-bold italic font-serif leading-tight">{selectedAnalysis.recommendedAction}</p>
+                   <div className="flex flex-col gap-4 pt-4">
+                      <Button 
+                        onClick={() => toast.success('Private Portfolio Drop Initiated')}
+                        className="w-full h-20 bg-white text-black font-bold text-xs shadow-xl"
+                      >
+                         <Mail size={18} className="mr-4" /> Dispatch Exclusive Dossier
+                      </Button>
+                      <button className="w-full h-20 border border-white/20 text-white font-bold text-[10px] uppercase tracking-[0.3em] hover:bg-white/10 transition-all flex items-center justify-center gap-3 rounded-xl">
+                         <MessageSquare size={18} /> Initialize Secure Message Channel
+                      </button>
+                   </div>
+                </div>
+             </section>
+          </aside>
+        )}
       </div>
-    </div>
+    </Box>
   );
 };
+
+const Loader2 = ({ className, size }: { className?: string, size?: number }) => (
+  <svg className={className} width={size} height={size} fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
+);

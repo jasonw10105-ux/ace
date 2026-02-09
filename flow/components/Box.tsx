@@ -20,6 +20,8 @@ export interface BoxProps extends React.HTMLAttributes<HTMLDivElement> {
   zIndex?: number;
   children?: React.ReactNode;
   as?: React.ElementType;
+  // aspect prop added to support aspect-ratio styling
+  aspect?: string;
 }
 
 export const Box: React.FC<BoxProps> = ({ 
@@ -36,6 +38,7 @@ export const Box: React.FC<BoxProps> = ({
   position,
   overflow,
   zIndex,
+  aspect,
   className = '',
   as: Component = 'div',
   ...props 
@@ -64,6 +67,8 @@ export const Box: React.FC<BoxProps> = ({
     position,
     overflow,
     zIndex,
+    // mapping aspect prop to aspectRatio CSS property to fix styles
+    aspectRatio: aspect,
   };
 
   return (

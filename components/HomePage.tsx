@@ -1,167 +1,130 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Search, 
-  TrendingUp, 
-  Sparkles, 
   ArrowRight, 
-  Award,
-  BookOpen,
-  Mic,
-  Camera,
-  MapPin,
-  Heart
+  Sparkles,
+  Database
 } from 'lucide-react';
-import { MOCK_ARTWORKS } from '../constants';
-import ArtCard from './ArtCard';
+import { Box, Flex, Text, Button } from '../flow';
 
-const Container: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12 w-full">
-    {children}
-  </div>
-);
-
-const SectionHeader: React.FC<{ title: string; icon: React.ReactNode; link: string; linkText?: string }> = ({ title, icon, link, linkText = "View All" }) => (
-  <div className="flex justify-between items-end mb-10 border-b border-gray-100 pb-6">
-    <div className="flex items-center gap-4">
-      <div className="text-black">{icon}</div>
-      <h2 className="text-3xl font-serif font-bold italic tracking-tight">{title}</h2>
-    </div>
-    <Link to={link} className="text-xs font-bold uppercase tracking-[0.2em] text-gray-400 hover:text-black transition-all flex items-center gap-2 group">
-      {linkText} <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+const SectionHeader: React.FC<{ title: string; link: string; linkText?: string }> = ({ title, link, linkText = "View All" }) => (
+  <Flex justify="between" align="end" mb={6} lg:mb={10} py={4} borderBottom="1px solid #E5E5E5">
+    <Text variant="h2" weight="normal" italic className="text-2xl lg:text-4xl">{title}</Text>
+    <Link to={link}>
+      <Flex align="center" gap={1} className="group">
+        <Text variant="label" size={11} color="#707070" className="group-hover:text-black transition-all font-bold">{linkText}</Text>
+        <ArrowRight size={14} className="text-gray-400 group-hover:translate-x-1 group-hover:text-black transition-transform" />
+      </Flex>
     </Link>
-  </div>
+  </Flex>
 );
 
 const HomePage: React.FC = () => {
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 800);
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-white">
-        <div className="w-12 h-12 border-4 border-gray-100 border-t-black rounded-full animate-spin mb-4"></div>
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-gray-400 animate-pulse">Synthesizing Frontier...</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="bg-white">
-      <title>ArtFlow | Discover Amazing Art</title>
-      <meta name="description" content="Discover unique artworks through our intelligent taste engine." />
-
-      <section className="pt-32 pb-24 text-center overflow-hidden">
-        <Container>
-          <div className="inline-flex items-center gap-2 bg-gray-50 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-[0.2em] mb-12 border border-gray-100">
-             <Sparkles size={12} className="text-blue-500" /> V.0.4 Neural Interface
-          </div>
-          <h1 className="text-7xl md:text-9xl font-serif font-bold leading-[0.9] tracking-tighter mb-10">
-            Art, <span className="italic">synthesized</span>.
-          </h1>
-          <p className="text-xl md:text-2xl text-gray-400 font-light max-w-2xl mx-auto mb-16 leading-relaxed">
-            Decoding aesthetic DNA to match visionaries with collectors through deep neural discovery.
-          </p>
-
-          <div className="max-w-3xl mx-auto relative group">
-            <div className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-black transition-colors">
-              <Search size={24} />
-            </div>
-            <form onSubmit={(e) => { e.preventDefault(); window.location.href = `/search?q=${searchQuery}`; }}>
-              <input 
-                type="text"
-                placeholder="Describe an aesthetic or feeling..."
-                className="w-full bg-gray-50 border-none rounded-[2rem] pl-16 pr-32 py-8 text-2xl font-serif italic focus:bg-white focus:ring-4 focus:ring-black/5 outline-none transition-all shadow-inner placeholder:text-gray-200"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 flex gap-2">
-                <button type="button" className="p-4 hover:bg-white rounded-full transition-colors text-gray-300 hover:text-black"><Camera size={20} /></button>
-                <button type="button" className="p-4 hover:bg-white rounded-full transition-colors text-gray-300 hover:text-black"><Mic size={20} /></button>
-              </div>
-            </form>
-          </div>
-        </Container>
-      </section>
-
-      <section className="py-24">
-        <Container>
-          <SectionHeader title="Trending Artists" icon={<TrendingUp />} link="/artists" />
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8">
-            {MOCK_ARTWORKS.map((art, idx) => (
-              <Link key={art.id + idx} to={`/artists`} className="group text-center">
-                <div className="relative mb-6 mx-auto w-full aspect-square max-w-[180px]">
-                  <div className="absolute inset-0 rounded-full border-2 border-gray-50 group-hover:border-black transition-colors scale-110"></div>
-                  <img 
-                    src={`https://picsum.photos/seed/${art.artist}/200`} 
-                    className="w-full h-full object-cover rounded-full grayscale hover:grayscale-0 transition-all duration-700 shadow-xl" 
-                    alt={art.artist}
+    <Box bg="white" className="animate-in fade-in duration-1000">
+      {/* Hero Section */}
+      <Box pt={20} lg:pt={32} pb={12} lg:pb={32} borderBottom="1px solid #E5E5E5">
+        <Box maxWidth="1600px" mx="auto" px={4}>
+          <Flex direction={['column', 'column', 'row']} gap={8} lg:gap={12} align="center">
+            <Box flex={1.2} width="100%">
+               <Flex align="center" gap={2} mb={4} lg:mb={6} color="#1023D7">
+                 <Sparkles size={14} lg:size={16} fill="currentColor" />
+                 <Text variant="label" size={10} weight="bold">Market Discovery V.0.4</Text>
+               </Flex>
+               <Text as="h1" variant="display" className="text-5xl lg:text-8xl mb-6 lg:mb-12 block leading-[0.9] tracking-tighter">
+                 Where art meets <br/><span className="italic font-serif">its home.</span>
+               </Text>
+               <Text as="p" color="#707070" weight="light" className="text-xl lg:text-2xl max-w-xl mb-10 lg:mb-20 leading-relaxed font-serif italic">
+                 A high-fidelity marketplace connecting creators with intentional collectors.
+               </Text>
+               
+               <Box maxWidth="650px" position="relative" width="100%" className="group">
+                  <input 
+                    type="text"
+                    placeholder="Search by artist, style, or medium..."
+                    className="w-full border-2 border-black rounded-none pl-4 lg:pl-6 pr-24 lg:pr-40 py-5 lg:py-7 text-xl lg:text-2xl font-serif italic focus:bg-gray-50 outline-none transition-all shadow-sm group-hover:shadow-xl"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                   />
-                  <div className="absolute -bottom-2 right-0 bg-white shadow-lg w-8 h-8 rounded-full flex items-center justify-center border border-gray-100">
-                     <TrendingUp size={14} className="text-green-500" />
-                  </div>
-                </div>
-                <h3 className="font-serif font-bold italic text-lg">{art.artist}</h3>
-                <div className="flex items-center justify-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400 mt-1">
-                  <MapPin size={10} /> {art.id === '1' ? 'Toronto, CA' : 'New York, US'}
-                </div>
-              </Link>
-            ))}
-          </div>
-        </Container>
-      </section>
+                  <Button 
+                    className="absolute right-2 top-2 bottom-2 px-6 lg:px-10"
+                    onClick={() => window.location.href = `/search?q=${searchQuery}`}
+                  >
+                    Search
+                  </Button>
+               </Box>
 
-      <section className="py-24 bg-gray-50">
-        <Container>
-          <SectionHeader title="Editorial Catalogues" icon={<BookOpen />} link="/catalogues" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-            {[
-              { title: "The Neural Landscape", img: "https://picsum.photos/seed/cat1/800/450", desc: "A deep dive into perception-accurate abstraction." },
-              { title: "Neo-Tokyo Afterhours", img: "https://picsum.photos/seed/cat2/800/450", desc: "Cyber-realism and the nocturnal urban experience." }
-            ].map((cat, i) => (
-              <Link key={i} to="/catalogues" className="group block">
-                <div className="aspect-[16/9] rounded-[2.5rem] overflow-hidden mb-8 relative">
-                  <img src={cat.img} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" alt={cat.title} />
-                  <div className="absolute top-6 left-6 bg-white/90 backdrop-blur px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest shadow-sm">
-                     Featured Synthesis
-                  </div>
-                </div>
-                <h3 className="text-4xl font-serif font-bold italic mb-3">{cat.title}</h3>
-                <p className="text-gray-400 text-lg font-light leading-relaxed max-w-md">{cat.desc}</p>
-              </Link>
-            ))}
-          </div>
-        </Container>
-      </section>
+               <Flex align="center" gap={2} mt={10} color="#CCC">
+                  <Database size={12} />
+                  <Text size={10} weight="bold" className="uppercase tracking-widest">500+ Curated Assets</Text>
+               </Flex>
+            </Box>
+            <Box flex={0.8} width="100%" className="lg:block">
+               <Box bg="#F3F3F3" aspect="4/5" position="relative" overflow="hidden" className="shadow-2xl">
+                  <img src="https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&q=80&w=1200" className="w-full h-full object-cover grayscale opacity-90 transition-transform duration-1000 hover:scale-105" alt="Curated Art" />
+               </Box>
+            </Box>
+          </Flex>
+        </Box>
+      </Box>
 
-      <footer className="py-20 border-t border-gray-50 bg-white">
-        <Container>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
-             <div className="space-y-6">
-                <h4 className="text-2xl font-serif font-bold">ArtFlow</h4>
-                <p className="text-sm text-gray-400 font-light leading-relaxed">The unified intelligence framework for the modern art professional.</p>
-             </div>
-             <div>
-                <h5 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-6">Discovery</h5>
-                <ul className="space-y-4 text-sm font-medium">
-                  <li><Link to="/artworks" className="hover:text-blue-500 transition-colors">Public Collection</Link></li>
-                  <li><Link to="/artists" className="hover:text-blue-500 transition-colors">The Frontier</Link></li>
-                  <li><Link to="/search" className="hover:text-blue-500 transition-colors">Neural Search</Link></li>
-                </ul>
-             </div>
-          </div>
-          <div className="mt-20 pt-8 border-t border-gray-50 flex flex-col md:flex-row justify-between items-center gap-6">
-             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-300">© 2024 ArtFlow Intelligence Systems</p>
-          </div>
-        </Container>
-      </footer>
-    </div>
+      {/* Featured Artists Grid */}
+      <Box py={12} lg:py={24} maxWidth="1600px" mx="auto" px={4}>
+        <SectionHeader title="The Artist Directory" link="/artists" linkText="Browse Directory" />
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 lg:gap-10">
+          {['Elena Vance', 'Kenji Sato', 'Sasha Novak', 'Julian Rossi', 'Amara Okafor', 'Marcus Thorne'].map((artist, idx) => (
+            <Link key={idx} to={`/artists`} className="group">
+              <Box mb={4} aspect="1/1" overflow="hidden" bg="#F3F3F3" className="border border-gray-100">
+                <img 
+                  src={`https://picsum.photos/seed/${artist}/500`} 
+                  className="w-full h-full object-cover grayscale transition-all duration-700 group-hover:grayscale-0 group-hover:scale-110" 
+                  alt={artist}
+                />
+              </Box>
+              <Text weight="bold" size={15} className="block">{artist}</Text>
+              <Text size={12} color="#707070" className="block mt-1 font-mono uppercase tracking-tighter">Verified Studio</Text>
+            </Link>
+          ))}
+        </div>
+      </Box>
+
+      {/* Modern Footer */}
+      <Box py={16} lg:py={24} borderTop="1px solid #E5E5E5" bg="white">
+        <Box maxWidth="1600px" mx="auto" px={4}>
+          <Flex direction={['column', 'row']} justify="between" align="start" wrap gap={12}>
+             <Box className="space-y-6">
+                <Text variant="h2" weight="black" tracking="-0.04em" style={{ fontSize: '32px', fontFamily: 'Inter, sans-serif' }}>ArtFlow</Text>
+                <Text size={12} color="#707070" className="block max-w-xs uppercase tracking-[0.2em] font-bold leading-relaxed">
+                  The high-fidelity operating system for the art market.
+                </Text>
+             </Box>
+             <Flex gap={12} wrap>
+                <Box className="space-y-4">
+                   <Text variant="label" size={11} color="black" weight="bold">Portfolio</Text>
+                   <Link to="/artworks" className="block text-sm text-gray-500 hover:text-black transition-colors font-medium">All Works</Link>
+                   <Link to="/artists" className="block text-sm text-gray-500 hover:text-black transition-colors font-medium">Artist Index</Link>
+                </Box>
+                <Box className="space-y-4">
+                   <Text variant="label" size={11} color="black" weight="bold">Intelligence</Text>
+                   <Link to="/search" className="block text-sm text-gray-500 hover:text-black transition-colors font-medium">Search Guide</Link>
+                   <Link to="/explore" className="block text-sm text-gray-500 hover:text-black transition-colors font-medium">Aesthetic Insight</Link>
+                </Box>
+             </Flex>
+          </Flex>
+          <Box mt={24} pt={10} borderTop="1px solid #F3F3F3" className="flex justify-between items-center text-[#CCC]">
+             <Text variant="label" size={9} weight="bold">© 2024 ArtFlow — High Fidelity Market OS</Text>
+             <Flex gap={4}>
+                <Text size={9} weight="bold" className="uppercase tracking-widest">Privacy</Text>
+                <Text size={9} weight="bold" className="uppercase tracking-widest">Ledger</Text>
+             </Flex>
+          </Box>
+        </Box>
+      </Box>
+    </Box>
   );
 };
 

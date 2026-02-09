@@ -1,25 +1,24 @@
-
 import React from 'react';
 import { 
   Radar, RadarChart, PolarGrid, 
   PolarAngleAxis, ResponsiveContainer 
 } from 'recharts';
-import { Brain, Target, Activity, Zap, TrendingUp } from 'lucide-react';
+// Fix: Alias Activity as PulseIcon to match usage in the component
+import { Brain, Target, Activity as PulseIcon, Zap, TrendingUp } from 'lucide-react';
 import { Box, Flex, Text } from '../flow';
 
-interface NeuralVector {
+interface DiscoveryVector {
   subject: string;
-  A: number; // Current weight
+  A: number;
   fullMark: number;
 }
 
-interface NeuralMapProps {
-  data?: NeuralVector[];
+interface DiscoveryMapProps {
+  vectors?: DiscoveryVector[];
 }
 
-export const CollectorNeuralMap: React.FC<NeuralMapProps> = ({ data }) => {
-  // Default vector mapping if no data provided
-  const defaultData: NeuralVector[] = [
+export const CollectorDiscoveryMap: React.FC<DiscoveryMapProps> = ({ vectors }) => {
+  const chartData = vectors || [
     { subject: 'Minimalism', A: 88, fullMark: 100 },
     { subject: 'Abstraction', A: 72, fullMark: 100 },
     { subject: 'Cyber-Realism', A: 45, fullMark: 100 },
@@ -28,8 +27,6 @@ export const CollectorNeuralMap: React.FC<NeuralMapProps> = ({ data }) => {
     { subject: 'Pop Art', A: 20, fullMark: 100 },
   ];
 
-  const chartData = data || defaultData;
-
   return (
     <Box bg="white" border="1px solid #E5E5E5" p={8} borderRadius="2px" position="relative" overflow="hidden" className="group shadow-sm hover:shadow-xl transition-all duration-700">
       <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/40 rounded-bl-full pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-1000"></div>
@@ -37,12 +34,12 @@ export const CollectorNeuralMap: React.FC<NeuralMapProps> = ({ data }) => {
       <Flex justify="between" align="start" mb={10}>
          <Box>
             <div className="flex items-center gap-2 text-blue-600 font-black text-[10px] uppercase tracking-[0.4em] mb-2">
-               <Target size={14} /> Aesthetic DNA
+               <Target size={14} /> Creative Signature
             </div>
-            <Text variant="h2" className="text-3xl font-serif font-bold italic leading-none">Neural Map.</Text>
+            <Text variant="h2" className="text-3xl font-serif font-bold italic leading-none">Discovery Map.</Text>
          </Box>
          <Box textAlign="right">
-            <span className="text-[10px] font-mono font-bold text-green-600 bg-green-50 px-2 py-1">CALIBRATED</span>
+            <span className="text-[10px] font-mono font-bold text-green-600 bg-green-50 px-2 py-1 uppercase">Synced</span>
          </Box>
       </Flex>
 
@@ -55,7 +52,7 @@ export const CollectorNeuralMap: React.FC<NeuralMapProps> = ({ data }) => {
               tick={{ fill: '#999', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }} 
             />
             <Radar
-              name="Collector DNA"
+              name="Taste Discovery"
               dataKey="A"
               stroke="#000"
               strokeWidth={2}
@@ -70,25 +67,25 @@ export const CollectorNeuralMap: React.FC<NeuralMapProps> = ({ data }) => {
          <section className="space-y-4">
             <Flex align="center" gap={3}>
                <TrendingUp size={14} className="text-blue-500" />
-               <span className="text-[10px] font-black uppercase tracking-widest text-black">Trajectory Insight</span>
+               <span className="text-[10px] font-black uppercase tracking-widest text-black">Aesthetic Trajectory</span>
             </Flex>
             <p className="text-sm text-gray-500 font-light italic leading-relaxed">
-              Your profile is currently <span className="text-black font-bold">pivoting 14% toward Brutalist geometry</span> based on high-intensity detail inspections in the last 48 hours.
+              Your profile is currently <span className="text-black font-bold">pivoting 14% toward Brutalist geometry</span> based on recent inspections.
             </p>
          </section>
 
          <Box bg="#F8F8F8" p={4} borderLeft="4px solid #000">
             <Flex align="center" gap={2} mb={1}>
                <Zap size={12} className="text-blue-500" />
-               <Text weight="bold" size={10} tracking="0.1em">STRATEGIC ALIGNMENT</Text>
+               <Text weight="bold" size={10} tracking="0.1em">STRATEGIC SEGMENT</Text>
             </Flex>
-            <Text size={12} color="#666">Next recommended segment: <span className="text-black font-bold">Monochrome Oils ($5k-$8k)</span></Text>
+            <Text size={12} color="#666">Focus category: <span className="text-black font-bold">Monochrome Oils ($5k-$8k)</span></Text>
          </Box>
       </div>
 
       <div className="mt-8 flex items-center justify-between">
          <div className="flex items-center gap-2 text-[8px] font-black uppercase tracking-widest text-gray-300 animate-pulse">
-            <Activity size={10} /> Syncing Interaction Loops
+            <PulseIcon size={10} /> Syncing Activity Loops
          </div>
          <button className="text-[10px] font-black uppercase tracking-widest text-blue-600 border-b border-blue-200 pb-0.5 hover:border-blue-600 transition-all">
             Recalibrate Manually

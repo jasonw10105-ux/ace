@@ -1,13 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { UserRole } from '../types';
-import { ArrowLeft, User, Palette, Globe, Cpu, ShieldCheck, Lock, Fingerprint, RefreshCw } from 'lucide-react';
+import { ArrowLeft, User, Palette, Globe, Cpu, ShieldCheck, Lock, Fingerprint, RefreshCw, HelpCircle, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface AuthFlowProps {
-  onComplete: (email: string, role: UserRole) => void;
+  onComplete: (role: UserRole, isNewUser: boolean) => void;
   onBackToHome: () => void;
 }
 
@@ -30,19 +30,15 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ onComplete, onBackToHome }) 
   const handleInitialSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
-    // Supabase signInWithOtp sends the 6-digit code to the email
     const { error } = await supabase.auth.signInWithOtp({ 
       email,
-      options: {
-        shouldCreateUser: true,
-      }
+      options: { shouldCreateUser: true }
     });
 
     if (error) {
       toast.error(error.message);
     } else {
-      toast.success('Neural verification code dispatched');
+      toast.success('Identity code dispatched.');
       setStep('otp');
       setResendCooldown(60);
     }
@@ -51,47 +47,25 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ onComplete, onBackToHome }) 
 
   const handleOtpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (token.length < 6) {
-      toast.error('Identity token must be 6 digits');
-      return;
-    }
+    if (token.length < 6) return;
 
     setIsLoading(true);
-    // Verifying the OTP code
-    const { data, error } = await supabase.auth.verifyOtp({ 
-      email, 
-      token, 
-      type: 'email' // Standard type for 6-digit email OTPs
-    });
+    const { data, error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
 
     if (error) {
-      toast.error('Neural key rejected. Check your token.');
+      toast.error('Identity key rejected.');
     } else if (data.user) {
-      // Check if profile exists
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, isOnboarded')
         .eq('id', data.user.id)
         .single();
 
       if (profile) {
-        onComplete(email, profile.role);
+        onComplete(profile.role, false);
       } else {
         setStep('role');
       }
-    }
-    setIsLoading(false);
-  };
-
-  const handleResend = async () => {
-    if (resendCooldown > 0) return;
-    setIsLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({ email });
-    if (error) {
-      toast.error('Signal broadcast failed');
-    } else {
-      toast.success('New neural key dispatched');
-      setResendCooldown(60);
     }
     setIsLoading(false);
   };
@@ -102,16 +76,18 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ onComplete, onBackToHome }) 
     if (user) {
       const { error } = await supabase.from('profiles').insert({
         id: user.id,
+        user_id: user.id,
         email: user.email,
         role: selectedRole,
         profile_complete: true,
-        isOnboarded: false // Matching UserProfile interface
+        isOnboarded: false,
+        created_at: new Date().toISOString()
       });
 
       if (error) {
-        toast.error('Profile synthesis failed');
+        toast.error('Identity mapping failed.');
       } else {
-        onComplete(email, selectedRole);
+        onComplete(selectedRole, true);
       }
     }
     setIsLoading(false);
@@ -127,42 +103,37 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ onComplete, onBackToHome }) 
 
       <div className="max-w-md w-full space-y-10">
         {step === 'initial' && (
-          <div className="space-y-10">
+          <div className="space-y-10 animate-in fade-in duration-500">
             <div className="text-center">
-              <div className="w-20 h-20 bg-gray-50 rounded-[2rem] flex items-center justify-center text-gray-300 mx-auto mb-8 shadow-inner border border-gray-100">
+              <div className="w-20 h-20 bg-gray-50 rounded-[2rem] flex items-center justify-center text-gray-300 mx-auto mb-8 border border-gray-100 shadow-inner">
                 <Globe size={32} />
               </div>
-              <h1 className="text-5xl font-serif font-bold italic tracking-tight mb-4 text-black">ArtFlow Access.</h1>
-              <p className="text-gray-400 font-light text-lg">Request a neural key to enter the frontier.</p>
+              <h1 className="text-5xl font-serif font-bold italic tracking-tight mb-4 leading-none">ArtFlow Access.</h1>
+              <p className="text-gray-400 font-light text-lg">Identify yourself to enter the spectrum.</p>
             </div>
 
             <form onSubmit={handleInitialSubmit} className="space-y-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 ml-4">Identity Email</label>
+                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 ml-4">Registry Email</label>
                 <input 
-                  type="email" 
-                  required
-                  value={email}
+                  type="email" required value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@example.com"
-                  className="w-full px-8 py-5 bg-gray-50 border-2 border-transparent rounded-[1.5rem] outline-none focus:bg-white focus:border-black transition-all shadow-inner placeholder:text-gray-200 text-lg"
+                  className="w-full px-8 py-5 bg-gray-50 border-2 border-transparent rounded-[1.5rem] outline-none focus:bg-white focus:border-black transition-all text-lg shadow-inner"
                 />
               </div>
-              <button 
-                disabled={isLoading || !email} 
-                className="w-full bg-black text-white py-5 rounded-[1.5rem] font-bold uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-3 disabled:opacity-30 disabled:hover:scale-100"
-              >
-                {isLoading ? <Cpu className="animate-spin" size={18} /> : 'Request Access'}
+              <button disabled={isLoading || !email} className="w-full bg-black text-white py-6 rounded-[1.5rem] font-bold uppercase tracking-widest hover:scale-[1.02] transition-all flex items-center justify-center gap-3 disabled:opacity-30 shadow-xl shadow-black/10">
+                {isLoading ? <Cpu className="animate-spin" size={18} /> : 'Request Connection'}
               </button>
             </form>
 
-            <div className="text-center pt-6 border-t border-gray-50">
-               <button 
+            <div className="pt-8 border-t border-gray-50 text-center">
+              <button 
                 onClick={() => navigate('/recovery')}
-                className="flex items-center gap-2 mx-auto text-xs font-bold uppercase tracking-widest text-blue-500 hover:text-black transition-colors"
-               >
-                 <Lock size={14} /> Troubleshoot credentials
-               </button>
+                className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-500 hover:text-black transition-all flex items-center justify-center gap-2 mx-auto group"
+              >
+                <Zap size={14} className="group-hover:animate-pulse" /> Access Recovery Engine
+              </button>
             </div>
           </div>
         )}
@@ -170,86 +141,63 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ onComplete, onBackToHome }) 
         {step === 'otp' && (
           <div className="space-y-10 animate-in slide-in-from-bottom-4 duration-500">
             <div className="text-center">
-               <div className="w-20 h-20 bg-blue-50 rounded-[2rem] flex items-center justify-center text-blue-500 mx-auto mb-8 shadow-inner border border-blue-100">
+               <div className="w-20 h-20 bg-blue-50 rounded-[2rem] flex items-center justify-center text-blue-500 mx-auto mb-8 border border-blue-100 shadow-inner">
                  <Fingerprint size={32} />
                </div>
-               <h1 className="text-5xl font-serif font-bold italic tracking-tight mb-4">Verify Node.</h1>
-               <p className="text-gray-400 font-light text-lg">Enter the 6-digit key sent to <span className="text-black font-medium">{email}</span></p>
+               <h1 className="text-5xl font-serif font-bold italic tracking-tight mb-4">Verification.</h1>
+               <p className="text-gray-400 font-light text-lg">Enter the 6-digit identity key dispatched to <span className="text-black font-medium">{email}</span></p>
             </div>
 
-            <form onSubmit={handleOtpSubmit} className="space-y-8">
+            <form onSubmit={handleOtpSubmit} className="space-y-10">
               <input 
-                type="text" 
-                required
-                autoFocus
-                maxLength={6}
+                type="text" required autoFocus maxLength={6}
                 value={token}
                 onChange={(e) => setToken(e.target.value.replace(/\D/g, ''))}
                 placeholder="000000"
-                className="w-full px-8 py-6 bg-gray-50 border-2 border-transparent rounded-[2rem] text-center text-5xl font-mono font-bold tracking-[0.4em] outline-none focus:bg-white focus:border-blue-500 transition-all shadow-inner text-black placeholder:text-gray-100"
+                className="w-full py-8 bg-gray-50 border-2 border-transparent rounded-[2rem] text-center text-5xl font-mono font-bold tracking-[0.4em] outline-none focus:bg-white focus:border-black transition-all shadow-inner"
               />
-              
-              <div className="space-y-4">
-                <button 
-                  disabled={isLoading || token.length < 6} 
-                  className="w-full bg-black text-white py-5 rounded-[1.5rem] font-bold uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-3 disabled:opacity-30"
-                >
-                  {isLoading ? <Cpu className="animate-spin" size={18} /> : (
-                    <>
-                      <ShieldCheck size={18} />
-                      Verify Identity
-                    </>
-                  )}
-                </button>
-                
-                <div className="text-center">
-                  <button 
-                    type="button"
-                    onClick={handleResend}
-                    disabled={resendCooldown > 0 || isLoading}
-                    className="text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-black transition-colors disabled:opacity-50 flex items-center gap-2 mx-auto"
-                  >
-                    <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-                    {resendCooldown > 0 ? `Resend Signal in ${resendCooldown}s` : 'Resend Neural Key'}
-                  </button>
-                </div>
-              </div>
+              <button disabled={isLoading || token.length < 6} className="w-full bg-black text-white py-6 rounded-[1.5rem] font-bold uppercase tracking-widest hover:scale-[1.02] transition-all flex items-center justify-center gap-3 shadow-xl">
+                {isLoading ? <Cpu className="animate-spin" size={18} /> : 'Verify Identity'}
+              </button>
             </form>
 
-            <button 
-              onClick={() => setStep('initial')} 
-              className="w-full text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-red-500 transition-colors"
-            >
-              Cancel & change email
-            </button>
+            <div className="text-center space-y-4">
+              <button 
+                type="button"
+                disabled={resendCooldown > 0 || isLoading}
+                onClick={handleInitialSubmit}
+                className="text-xs font-bold uppercase text-gray-400 hover:text-black disabled:opacity-50 transition-colors"
+              >
+                {resendCooldown > 0 ? `Resend Signal in ${resendCooldown}s` : 'Resend Identity Key'}
+              </button>
+              <br />
+              <button onClick={() => setStep('initial')} className="text-xs font-bold uppercase text-gray-300 hover:text-black">Cancel & Restart</button>
+            </div>
           </div>
         )}
 
         {step === 'role' && (
-          <div className="space-y-8 animate-in zoom-in duration-500">
+          <div className="space-y-10 animate-in zoom-in duration-500">
             <div className="text-center">
-               <h1 className="text-6xl font-serif font-bold italic tracking-tight mb-4">Define Intent.</h1>
-               <p className="text-gray-400 font-light text-lg">Identify your primary interaction loop on the frontier.</p>
+               <h1 className="text-6xl font-serif font-bold italic tracking-tight mb-4">Intent.</h1>
+               <p className="text-gray-400 font-light text-lg">Define your primary workspace on the frontier.</p>
             </div>
 
             <div className="space-y-4">
               {[
-                { id: 'artist', label: 'Join as Artist', desc: 'Scale studio insights, manage catalog, and track intent signals.', icon: <Palette className="text-blue-500" /> },
-                { id: 'collector', label: 'Join as Collector', desc: 'Build your personal vault and decode your aesthetic DNA.', icon: <User className="text-purple-500" /> }
+                { id: 'ARTIST', label: 'Join as Artist', desc: 'Scale studio management and market insights.', icon: <Palette className="text-blue-500" /> },
+                { id: 'COLLECTOR', label: 'Join as Collector', desc: 'Build a private vault and discover with intelligence.', icon: <User className="text-purple-500" /> }
               ].map((r) => (
                 <button 
-                  key={r.id} 
-                  disabled={isLoading}
+                  key={r.id} disabled={isLoading}
                   onClick={() => handleRoleSelection(r.id as any)} 
-                  className="w-full p-8 bg-white border-2 border-gray-100 rounded-[2.5rem] hover:border-black text-left group transition-all hover:shadow-2xl disabled:opacity-50"
+                  className="w-full p-8 bg-white border-2 border-gray-100 rounded-[2.5rem] hover:border-black text-left group transition-all hover:shadow-2xl"
                 >
-                  <div className="flex items-center gap-4 mb-3">
-                     <div className="p-3 bg-gray-50 rounded-2xl group-hover:bg-black group-hover:text-white transition-colors">
-                        {r.icon}
-                     </div>
-                     <p className="text-[10px] font-bold uppercase text-gray-400 tracking-[0.2em]">{r.id} protocol</p>
+                  <div className="flex items-center gap-4 mb-4">
+                     <div className="p-4 bg-gray-50 rounded-2xl group-hover:bg-black group-hover:text-white transition-colors shadow-sm">{r.icon}</div>
+                     <p className="text-[10px] font-bold uppercase text-gray-400 tracking-[0.3em]">{r.id}</p>
                   </div>
-                  <p className="text-2xl font-bold mb-1 group-hover:text-blue-600 transition-colors">{r.label}</p>
+                  <p className="text-2xl font-bold mb-1">{r.label}</p>
                   <p className="text-sm text-gray-400 font-light leading-relaxed">{r.desc}</p>
                 </button>
               ))}

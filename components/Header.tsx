@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { UserProfile, SmartReminder } from '../types';
-import { Bell, MessageSquare, Globe, Target, ChevronDown, LogOut, Settings as SettingsIcon } from 'lucide-react';
+import { Bell, MessageSquare, Globe, Target, ChevronDown, LogOut, Settings as SettingsIcon, Compass } from 'lucide-react';
 import { Flex, Text, Box, Button } from '../flow';
 import { reminderService } from '../services/reminderService';
 
@@ -24,20 +24,26 @@ const Header: React.FC<HeaderProps> = ({ user, onSearchClick, onLogoClick, onLog
       setUnreadReminderCount(count);
     };
     checkReminders();
-    // Refresh periodically for neural sync
     const interval = setInterval(checkReminders, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  const navCategories = user?.role === 'collector' 
+  const navCategories = (user?.role === 'COLLECTOR' || user?.role === 'BOTH')
     ? [
-        { name: 'Collector', items: ['Dashboard', 'Vault', 'Roadmap', 'Calendar', 'Frontier Network'] },
-        { name: 'Curations', items: ['Taste Matches', 'Saved Works'] }
+        { name: 'Portfolio', items: ['Dashboard', 'Vault', 'Roadmap', 'Scheme Architect', 'Vault Audit'] },
+        { name: 'Curations', items: ['Taste Matches', 'Saved Works', 'Calendar'] }
       ]
     : [
         { name: 'Studio', items: ['Dashboard', 'My Artworks', 'Upload New', 'Create Catalogue', 'Calendar'] },
         { name: 'Intelligence', items: ['Lead Intelligence', 'Sales Overview', 'Market Trends', 'Frontier Network'] }
       ];
+
+  // If user is 'BOTH', we might want to merge or provide a toggle. 
+  // For now, let's ensure 'BOTH' users see the Collector Roadmap as it's a primary discovery tool.
+  if (user?.role === 'BOTH') {
+    // Add studio items to a separate category for BOTH users
+    navCategories.push({ name: 'Studio', items: ['My Artworks', 'Upload New', 'Create Catalogue'] });
+  }
 
   return (
     <Box as="header" position="fixed" zIndex={200} width="100%" bg="white" border="1px solid #E5E5E5" height="80px">
@@ -64,7 +70,10 @@ const Header: React.FC<HeaderProps> = ({ user, onSearchClick, onLogoClick, onLog
                         className="hover:bg-[#F3F3F3] cursor-pointer transition-colors"
                         onClick={() => { onNavItemClick(item); setActiveMenu(null); }}
                       >
-                        <Text size={14} weight="medium">{item}</Text>
+                        <Flex align="center" gap={2}>
+                          {item === 'Roadmap' && <Compass size={14} className="text-blue-500" />}
+                          <Text size={14} weight="medium">{item}</Text>
+                        </Flex>
                       </Box>
                     ))}
                   </Box>
@@ -96,7 +105,7 @@ const Header: React.FC<HeaderProps> = ({ user, onSearchClick, onLogoClick, onLog
               onClick={() => setIsProfileOpen(!isProfileOpen)} 
               className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold transition-transform hover:scale-105"
             >
-              {user?.email[0].toUpperCase()}
+              {user?.email?.[0]?.toUpperCase() || 'U'}
             </button>
             {isProfileOpen && (
               <Box position="absolute" top="50px" right="0" width="280px" bg="white" shadow="0 20px 40px rgba(0,0,0,0.15)" border="1px solid #E5E5E5" p={3} borderRadius="16px" className="animate-in fade-in zoom-in-95">

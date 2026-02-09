@@ -3,6 +3,7 @@ import React from 'react'
 import { useLocation } from 'react-router-dom'
 import PublicHeader from './PublicHeader'
 import Header from './Header' // Logged in header
+import { AmbientAdvisor } from './AmbientAdvisor'
 
 interface NavigationProviderProps {
   children: React.ReactNode;
@@ -44,6 +45,7 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({
       <div className="pt-20">
         {children}
       </div>
+      {user && <AmbientAdvisor />}
     </>
   )
 }

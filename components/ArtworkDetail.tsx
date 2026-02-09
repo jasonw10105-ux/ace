@@ -11,7 +11,10 @@ import toast from 'react-hot-toast';
 import { 
   Layout, Heart, Share2, MessageSquare, ArrowLeft, 
   Zap, Palette, Activity, ShieldCheck, Calendar, 
-  MapPin, User, ChevronRight, Info, Award, History, Loader2
+  MapPin, User, ChevronRight, Info, Award, History, Loader2,
+  Sparkles,
+  Search,
+  Compass
 } from 'lucide-react';
 import { Box, Flex, Text, Button } from '../flow';
 
@@ -21,7 +24,8 @@ const ArtworkDetail: React.FC = () => {
   const [artwork, setArtwork] = useState<Artwork | null>(null);
   const [showVisualizer, setShowVisualizer] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
-  const [harmony, setHarmony] = useState<any>(null);
+  const [continuityInsight, setContinuityInsight] = useState<string>("");
+  const [materiality, setMateriality] = useState<{tactilePresence: string; lightingBehavior: string} | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(true);
   const [loading, setLoading] = useState(true);
   
@@ -45,8 +49,13 @@ const ArtworkDetail: React.FC = () => {
       setArtwork(data as Artwork);
       setLoading(false);
 
-      const result = await geminiService.analyzeAestheticHarmony(data as Artwork);
-      setHarmony(result);
+      const [continuityRes, materialityRes] = await Promise.all([
+        geminiService.generateContinuityInsight(data as Artwork, { recentSearches: ['Minimalist Abstraction'] }),
+        geminiService.analyzeMateriality(data.primary_image_url || data.imageUrl)
+      ]);
+
+      setContinuityInsight(continuityRes);
+      setMateriality(materialityRes);
       setIsAnalyzing(false);
     };
 
@@ -67,7 +76,6 @@ const ArtworkDetail: React.FC = () => {
 
   const handleAcquisitionSuccess = (ref: string) => {
     setShowCheckout(false);
-    // Move to Vault view
     navigate('/vault', { state: { newAsset: artwork?.id, paymentRef: ref } });
   };
 
@@ -133,50 +141,47 @@ const ArtworkDetail: React.FC = () => {
                   onClick={() => setShowVisualizer(true)} 
                   className="bg-black text-white px-10 py-5 rounded-2xl font-bold text-[10px] uppercase tracking-[0.2em] shadow-2xl flex items-center gap-3 hover:scale-105 transition-all"
                 >
-                  <Layout size={16} /> View In Situ (Real Scale)
+                  <Layout size={16} /> View in Situation
                 </button>
               </div>
             </div>
-            
-            {/* High-Fidelity Metadata */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-12 pt-12">
-               <section className="space-y-6">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-400 border-b border-gray-100 pb-4 flex items-center gap-2">
-                     <History size={14} className="text-blue-500" /> Provenance & Heritage
-                  </h3>
-                  <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100">
-                     <p className="text-sm text-gray-600 leading-relaxed font-light italic">
-                        {artwork.provenance || 'Direct from the studio of the visionary.'}
+
+            {/* Aesthetic Continuity - Human Centric AI */}
+            <section className="bg-white border border-gray-100 p-12 rounded-[3.5rem] shadow-sm space-y-6 relative overflow-hidden">
+               <div className="flex items-center gap-3 text-blue-600 font-bold text-[10px] uppercase tracking-[0.4em]">
+                  <Compass size={14} className="animate-pulse" /> Advisor Whisper
+               </div>
+               <p className="text-3xl font-serif italic text-gray-800 leading-relaxed font-light">
+                  {isAnalyzing ? "Synthesizing curatorial context..." : `"${continuityInsight}"`}
+               </p>
+            </section>
+
+            {/* Materiality Perception */}
+            <section className="bg-gray-900 text-white p-12 rounded-[3.5rem] shadow-2xl relative overflow-hidden group">
+               <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 blur-[80px] rounded-full group-hover:scale-150 transition-transform duration-1000"></div>
+               <div className="flex items-center gap-3 text-blue-400 font-bold text-[10px] uppercase tracking-[0.4em] mb-10">
+                  <Sparkles size={14} /> Materiality & Presence
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-12 relative z-10">
+                  <div className="space-y-4">
+                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500">Physicality</p>
+                     <p className="text-xl font-serif italic text-gray-200 leading-relaxed font-light">
+                        {isAnalyzing ? "Interpreting surface tension..." : materiality?.tactilePresence}
                      </p>
                   </div>
-               </section>
-
-               <section className="space-y-6">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-400 border-b border-gray-100 pb-4 flex items-center gap-2">
-                     <Palette size={14} className="text-blue-500" /> Chromatic Intelligence
-                  </h3>
-                  <div className="p-8 rounded-[2.5rem] relative overflow-hidden group shadow-sm transition-all hover:shadow-xl" style={{ backgroundColor: `${artwork.palette.primary}10` }}>
-                     <div className="relative z-10 space-y-4">
-                        <p className="text-sm text-gray-800 leading-relaxed font-light">
-                           {isAnalyzing ? "Synthesizing chromatic weights..." : harmony?.emotionalWeight}
-                        </p>
-                        <div className="flex gap-3">
-                           {[artwork.palette.primary, artwork.palette.secondary, ...artwork.palette.accents].slice(0, 4).map(c => (
-                             <div key={c} className="w-10 h-10 rounded-xl border-2 border-white shadow-xl" style={{ backgroundColor: c }} />
-                           ))}
-                        </div>
-                     </div>
+                  <div className="space-y-4">
+                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-300">Spectral Interaction</p>
+                     <p className="text-xl font-serif italic text-gray-200 leading-relaxed font-light">
+                        {isAnalyzing ? "Simulating lighting behavior..." : materiality?.lightingBehavior}
+                     </p>
                   </div>
-               </section>
-            </div>
+               </div>
+            </section>
           </div>
 
           <div className="lg:col-span-5">
             <div className="lg:sticky lg:top-32 space-y-12">
               <header className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <span className="bg-blue-50 text-blue-500 px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border border-blue-100">Verified Node</span>
-                </div>
                 <h1 className="text-6xl font-serif font-bold italic leading-[0.9] tracking-tight">{artwork.title}</h1>
                 <div className="flex items-center gap-4 text-2xl text-gray-400 font-light">
                    <Link to={`/artist/${artwork.artist.toLowerCase().replace(/\s+/g, '-')}`} className="text-black font-medium hover:text-blue-600 transition-colors">{artwork.artist}</Link>
@@ -206,14 +211,22 @@ const ArtworkDetail: React.FC = () => {
                     <div className="space-y-4">
                        <button 
                          onClick={() => { recordSignal('purchase'); setShowCheckout(true); }} 
-                         className="w-full bg-white text-black py-6 rounded-2xl font-bold text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-white/20 flex items-center justify-center gap-3"
+                         className="w-full bg-white text-black py-6 rounded-2xl font-bold text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-white/10 flex items-center justify-center gap-3"
                        >
                          <ShieldCheck size={20} /> Initiate Acquisition
                        </button>
-                       <p className="text-[10px] text-center text-gray-500 uppercase font-bold tracking-widest">
-                         Payments secured by <span className="text-white">Paystack</span>
-                       </p>
                     </div>
+                 </div>
+              </div>
+
+              <div className="bg-white border border-gray-100 p-10 rounded-[2.5rem] flex items-start gap-6">
+                 <MessageSquare className="text-blue-500 shrink-0" size={24} />
+                 <div className="space-y-2">
+                    <h4 className="text-sm font-bold uppercase tracking-widest">Studio Dialogue</h4>
+                    <p className="text-xs text-gray-400 leading-relaxed font-light">
+                      Connect directly with the artist's studio regarding provenance or private viewing.
+                    </p>
+                    <button className="text-[10px] font-bold uppercase text-blue-600 border-b border-blue-100 pb-0.5 hover:border-blue-600 transition-all mt-4">Initialize Message Channel</button>
                  </div>
               </div>
             </div>

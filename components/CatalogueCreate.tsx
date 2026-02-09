@@ -1,10 +1,15 @@
 
-import React, { useState, useRef, useCallback } from 'react';
-import { Camera, Image as ImageIcon, Plus, X, Globe, Lock, ShieldCheck, Tag, Layout, ArrowRight, Layers, Sparkles, Brain, Cpu, Clock, Key, Mail, UserCheck } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Camera, X, Globe, Lock, ShieldCheck, Tag, Layout, 
+  Layers, Sparkles, Brain, Upload, Loader2, Zap, 
+  MessageSquare, FileText, UserCheck, Eye, EyeOff, Settings2,
+  Trash2, Search, ArrowRight, ArrowLeft, Plus
+} from 'lucide-react';
 import { MOCK_ARTWORKS } from '../constants';
-import { ArtworkSelector } from './ArtworkSelector';
 import { geminiService } from '../services/geminiService';
-import { CatalogueAccessConfig } from '../types';
+import { CatalogueAccessConfig, Artwork, CatalogueItem } from '../types';
+import { Box, Flex, Text, Button, Grid, Separator } from '../flow';
 import toast from 'react-hot-toast';
 
 interface CatalogueCreateProps {
@@ -13,25 +18,22 @@ interface CatalogueCreateProps {
 }
 
 export const CatalogueCreate: React.FC<CatalogueCreateProps> = ({ onSave, onCancel }) => {
-  const coverInputRef = useRef<HTMLInputElement>(null);
-  const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'basic' | 'selection' | 'visibility'>('basic');
-  const [showArtSelector, setShowArtSelector] = useState(false);
-  const [newTag, setNewTag] = useState('');
-
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [suggestPrompt, setSuggestPrompt] = useState('');
+  
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     tags: [] as string[],
     selectedArtworkIds: [] as string[],
+    items: [] as CatalogueItem[],
     includePrices: true,
     access_config: {
       mode: 'public',
       password: '',
-      whitelistedTags: [] as string[],
-      whitelistedEmails: [] as string[],
+      whitelistedTags: [],
+      whitelistedEmails: [],
       timedAccess: false,
       autoPublishAt: '',
       isViewingRoomEnabled: false,
@@ -39,320 +41,215 @@ export const CatalogueCreate: React.FC<CatalogueCreateProps> = ({ onSave, onCanc
     } as CatalogueAccessConfig
   });
 
-  const handleCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setCoverPreview(reader.result as string);
-      reader.readAsDataURL(file);
-    }
-  };
+  const handleNeuralSuggest = async () => {
+    if (!suggestPrompt.trim()) return;
+    setIsSuggesting(true);
+    const loadingToast = toast.loading('Consulting Digital Registrar...');
+    
+    try {
+      const { suggestedIds, curatedTitle, sequenceReasoning } = await geminiService.suggestCatalogueComposition(MOCK_ARTWORKS as Artwork[], suggestPrompt);
+      
+      const suggestedArts = MOCK_ARTWORKS.filter(a => suggestedIds.includes(a.id));
+      const newItems: CatalogueItem[] = suggestedArts.map((art, idx) => ({
+        id: `suggest-${Date.now()}-${idx}`,
+        type: 'artwork',
+        content: art,
+        order: idx,
+        visiblePerspectiveIndexes: [0]
+      }));
 
-  const addTag = () => {
-    if (newTag.trim() && !formData.tags.includes(newTag.trim())) {
-      setFormData(prev => ({ ...prev, tags: [...prev.tags, newTag.trim()] }));
-      setNewTag('');
-    }
-  };
-
-  const removeTag = (tag: string) => {
-    setFormData(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tag) }));
-  };
-
-  const generateCuration = async () => {
-    if (formData.selectedArtworkIds.length === 0) {
-      toast.error('Select artworks first to trigger the curator assistant.');
-      return;
-    }
-    setIsGenerating(true);
-    const selectedArt = MOCK_ARTWORKS.filter(a => formData.selectedArtworkIds.includes(a.id));
-    const analysis = await geminiService.generateCurationStatement(
-      selectedArt.map(a => ({ title: a.title, style: a.style, medium: a.medium }))
-    );
-    setIsGenerating(false);
-    if (analysis) {
       setFormData(prev => ({
         ...prev,
-        description: analysis.description,
-        tags: Array.from(new Set([...prev.tags, ...analysis.tags]))
+        title: curatedTitle,
+        description: sequenceReasoning,
+        selectedArtworkIds: suggestedIds,
+        items: newItems
       }));
-      toast.success('Neural Curation Synced');
+      
+      toast.success(`Exhibition logic synthesized: ${curatedTitle}`, { id: loadingToast });
+    } catch (e) {
+      toast.error('Synthesis Interrupt', { id: loadingToast });
+    } finally {
+      setIsSuggesting(false);
+    }
+  };
+
+  const toggleArtworkLink = (id: string) => {
+    const isLinked = formData.selectedArtworkIds.includes(id);
+    if (isLinked) {
+      setFormData(prev => ({
+        ...prev,
+        selectedArtworkIds: prev.selectedArtworkIds.filter(i => i !== id),
+        items: prev.items.filter(item => !(item.type === 'artwork' && item.content.id === id))
+      }));
+    } else {
+      const art = MOCK_ARTWORKS.find(a => a.id === id);
+      if (art) {
+        const newItem: CatalogueItem = {
+          id: `item-${Date.now()}`,
+          type: 'artwork',
+          content: art,
+          order: formData.items.length,
+          visiblePerspectiveIndexes: [0]
+        };
+        setFormData(prev => ({
+          ...prev,
+          selectedArtworkIds: [...prev.selectedArtworkIds, id],
+          items: [...prev.items, newItem]
+        }));
+      }
     }
   };
 
   const handleSave = async () => {
     setIsSaving(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    onSave({ ...formData, coverPreview });
+    await new Promise(r => setTimeout(r, 1000));
+    onSave(formData);
     setIsSaving(false);
   };
 
-  const selectedArtworks = MOCK_ARTWORKS.filter(art => formData.selectedArtworkIds.includes(art.id));
-
-  const TabButton = ({ id, label, icon }: { id: typeof activeTab, label: string, icon: React.ReactNode }) => (
-    <button
-      onClick={() => setActiveTab(id)}
-      className={`flex items-center gap-2 px-6 py-4 border-b-2 transition-all font-bold text-sm uppercase tracking-widest ${
-        activeTab === id ? 'border-black text-black' : 'border-transparent text-gray-400 hover:text-gray-600'
-      }`}
-    >
-      {icon}
-      {label}
-    </button>
-  );
-
   return (
-    <div className="max-w-5xl mx-auto px-4 py-32 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
-        <div>
-          <button onClick={onCancel} className="flex items-center gap-2 text-gray-400 hover:text-black transition-colors mb-4 group">
-            <X className="w-5 h-5 group-hover:rotate-90 transition-transform" />
-            <span className="text-xs font-bold uppercase tracking-widest">Discard Draft</span>
-          </button>
-          <h1 className="text-5xl font-serif font-bold italic tracking-tight">Viewing Room Studio.</h1>
-        </div>
-        <button 
-          onClick={handleSave}
-          disabled={isSaving || !formData.title || formData.selectedArtworkIds.length === 0}
-          className="bg-black text-white px-10 py-4 rounded-2xl font-bold hover:scale-105 transition-all disabled:opacity-30 flex items-center gap-2 shadow-xl shadow-black/10"
-        >
-          {isSaving ? <Cpu className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-          {isSaving ? 'Encrypting Curation...' : 'Finalize & Drop'}
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-        <div className="lg:col-span-1 space-y-8">
-          <div className="bg-gray-50 rounded-[2.5rem] p-8 border border-gray-100 shadow-inner">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-300 mb-6">Master Visual Anchor</h3>
-            {coverPreview ? (
-              <div className="relative aspect-[3/4] rounded-3xl overflow-hidden group shadow-2xl">
-                <img src={coverPreview} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <button onClick={() => coverInputRef.current?.click()} className="p-4 bg-white/20 text-white rounded-full"><Camera size={24} /></button>
-                </div>
-              </div>
-            ) : (
-              <div onClick={() => coverInputRef.current?.click()} className="aspect-[3/4] border-2 border-dashed border-gray-100 rounded-[2.5rem] flex flex-col items-center justify-center cursor-pointer hover:bg-white transition-all group">
-                <Camera className="w-8 h-8 text-gray-200 group-hover:text-black mb-4 transition-colors" />
-                <p className="font-bold text-xs uppercase tracking-widest">Upload Key Asset</p>
-              </div>
-            )}
-            <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
+    <div className="bg-white min-h-screen pb-40 animate-in fade-in duration-1000">
+      <Box maxWidth="1600px" mx="auto" px={6} py={32}>
+        <header className="mb-24 flex flex-col lg:flex-row justify-between items-start lg:items-end gap-12 border-b border-gray-100 pb-16">
+          <Box maxWidth="900px">
+             <button onClick={onCancel} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 hover:text-black mb-10 transition-colors">
+                <ArrowLeft size={16} /> Return to Studio
+             </button>
+             <div className="flex items-center gap-3 text-blue-600 font-black text-[10px] uppercase tracking-[0.4em] mb-6">
+               <Layers size={14} className="animate-pulse" /> Creative Director Protocol
+             </div>
+             <h1 className="text-8xl font-serif font-bold italic tracking-tighter leading-[0.8] mb-8">Architect.</h1>
+             <p className="text-gray-400 text-2xl font-light leading-relaxed">
+               Define a thesis or let the <span className="text-black font-medium">Neural Curator</span> assemble an exhibition based on your intent.
+             </p>
+          </Box>
+          <div className="flex gap-4">
+             <Button 
+              onClick={handleSave} 
+              disabled={formData.items.length === 0 || !formData.title}
+              className="px-12 h-20 text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl"
+             >
+                {isSaving ? <Loader2 className="animate-spin mr-3" /> : <ShieldCheck size={20} className="mr-3" />}
+                Sync Catalogue to Frontier
+             </Button>
           </div>
+        </header>
 
-          <div className="bg-black p-8 rounded-[2.5rem] text-white relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl group-hover:scale-150 transition-transform"></div>
-            <h4 className="text-blue-400 font-bold text-[10px] uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Sparkles size={14} /> Neural Assistant
-            </h4>
-            <p className="text-sm text-gray-400 leading-relaxed font-light mb-8">
-              Let the AI Curator synthesize your works into a sophisticated curatorial statement.
-            </p>
-            <button 
-              onClick={generateCuration}
-              disabled={isGenerating || formData.selectedArtworkIds.length === 0}
-              className="w-full py-4 bg-white text-black rounded-xl font-bold text-xs uppercase tracking-widest hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
-            >
-              {isGenerating ? <Cpu className="animate-spin" size={14} /> : <Brain size={14} />}
-              {isGenerating ? 'Decoding DNA...' : 'Generate AI Narrative'}
-            </button>
-          </div>
-        </div>
-
-        <div className="lg:col-span-2">
-          <div className="flex border-b border-gray-100 mb-8 overflow-x-auto">
-            <TabButton id="basic" label="Curation" icon={<Layers size={16} />} />
-            <TabButton id="selection" label="Asset Loop" icon={<Tag size={16} />} />
-            <TabButton id="visibility" label="Viewing Room" icon={<Lock size={16} />} />
-          </div>
-
-          <div className="space-y-8 min-h-[400px]">
-            {activeTab === 'basic' && (
-              <div className="space-y-10 animate-in fade-in slide-in-from-right-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-300">Catalogue Identity</label>
-                  <input 
-                    type="text" 
-                    value={formData.title}
-                    onChange={(e) => setFormData({...formData, title: e.target.value})}
-                    placeholder="e.g. The Vernal Synthesis"
-                    className="w-full text-4xl font-serif font-bold italic border-b border-gray-50 py-4 focus:border-black outline-none transition-all placeholder:text-gray-100 bg-transparent"
-                  />
-                </div>
-                <div className="space-y-4">
-                  <label className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-300">Curatorial Thesis</label>
-                  <textarea 
-                    value={formData.description}
-                    onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    rows={6}
-                    placeholder="Define the aesthetic narrative..."
-                    className="w-full border-2 border-gray-50 rounded-[2rem] px-8 py-6 bg-gray-50 focus:bg-white focus:border-black outline-none transition-all resize-none font-light text-lg leading-relaxed shadow-inner"
-                  />
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'selection' && (
-              <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
-                <div className="flex justify-between items-center bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
-                  <div className="flex items-center gap-4">
-                     <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm text-blue-500"><Layers size={20}/></div>
-                     <div>
-                        <p className="text-sm font-bold">Selection Matrix</p>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{formData.selectedArtworkIds.length} Works Linked</p>
-                     </div>
-                  </div>
-                  <button onClick={() => setShowArtSelector(true)} className="bg-black text-white px-6 py-3 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:scale-105 transition-all">Select Assets</button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {selectedArtworks.map(art => (
-                    <div key={art.id} className="p-4 bg-white border border-gray-100 rounded-2xl flex items-center gap-4 group hover:shadow-xl transition-all border-l-4 border-l-blue-500">
-                      <img src={art.imageUrl} className="w-16 h-16 rounded-xl object-cover" />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-sm truncate">{art.title}</p>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">${art.price.toLocaleString()}</p>
-                      </div>
-                      <button onClick={() => setFormData({...formData, selectedArtworkIds: formData.selectedArtworkIds.filter(id => id !== art.id)})} className="p-2 text-gray-200 hover:text-red-500 transition-colors"><X size={14}/></button>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-20">
+           {/* Neural Suggest Center */}
+           <div className="lg:col-span-4 space-y-10">
+              <section className="bg-black text-white p-12 rounded-[4rem] shadow-2xl relative overflow-hidden group">
+                 <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 blur-[100px] rounded-full group-hover:scale-150 transition-transform duration-1000"></div>
+                 <div className="relative z-10">
+                    <h3 className="text-xs font-black uppercase tracking-[0.4em] text-blue-400 mb-10 flex items-center gap-3">
+                       <Brain size={18} /> Neural Suggest
+                    </h3>
+                    <p className="text-lg text-gray-400 font-light mb-10 leading-relaxed italic">
+                       "Describe the atmosphere of this drop. I will scan your Studio Registry to find matching assets."
+                    </p>
+                    <div className="space-y-6">
+                       <textarea 
+                         value={suggestPrompt}
+                         // Fix: Fixed typo where setSuggestPrompt was being passed the setter itself instead of the value
+                         onChange={e => setSuggestPrompt(e.target.value)}
+                         placeholder="e.g. 'Highly textural works with minimalist energy for the NY market...'"
+                         className="w-full bg-white/5 border border-white/10 rounded-[2rem] px-6 py-6 font-serif italic text-lg outline-none focus:border-blue-500 transition-all resize-none"
+                         rows={4}
+                       />
+                       <button 
+                        onClick={handleNeuralSuggest}
+                        disabled={isSuggesting || !suggestPrompt}
+                        className="w-full py-6 bg-white text-black rounded-[2rem] font-bold text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-3 hover:scale-[1.02] transition-all disabled:opacity-30"
+                       >
+                          {isSuggesting ? <Loader2 className="animate-spin" size={16}/> : <Zap size={16}/>}
+                          Synthesize Composition
+                       </button>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                 </div>
+              </section>
 
-            {activeTab === 'visibility' && (
-              <div className="space-y-10 animate-in fade-in slide-in-from-right-4">
-                {/* Immersive Room Toggle */}
-                <div className="p-8 bg-black text-white rounded-[2.5rem] flex items-center justify-between shadow-2xl relative overflow-hidden">
-                   <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 blur-[60px] rounded-full"></div>
-                   <div className="space-y-1 relative z-10">
-                      <h4 className="font-bold text-lg flex items-center gap-2">Immersive Viewing Room Mode <Sparkles size={16} className="text-blue-400"/></h4>
-                      <p className="text-sm text-gray-400 font-light">Enabled dark-gallery UI, curatorial audio, and presence signals.</p>
-                   </div>
-                   <div className={`w-14 h-8 rounded-full transition-colors relative flex items-center px-1 cursor-pointer ${formData.access_config.isViewingRoomEnabled ? 'bg-blue-500' : 'bg-white/20'}`} 
-                        onClick={() => setFormData({...formData, access_config: {...formData.access_config, isViewingRoomEnabled: !formData.access_config.isViewingRoomEnabled}})}>
-                      <div className={`w-6 h-6 bg-white rounded-full shadow-md transition-transform ${formData.access_config.isViewingRoomEnabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { id: 'public', label: 'Public Signal', desc: 'Visible in search & global feed.', icon: Globe },
-                    { id: 'invite_only', label: 'Invite Only', desc: 'Neural Gatekeeper Active.', icon: UserCheck },
-                    { id: 'password', label: 'Protected', desc: 'Standard key encryption.', icon: Key },
-                    { id: 'link_only', label: 'Private Link', desc: 'Hidden from discovery engines.', icon: Mail }
-                  ].map(mode => (
-                    <div 
-                      key={mode.id}
-                      onClick={() => setFormData({...formData, access_config: {...formData.access_config, mode: mode.id as any}})}
-                      className={`p-6 rounded-[2rem] border-2 transition-all cursor-pointer group ${formData.access_config.mode === mode.id ? 'bg-white border-black shadow-xl scale-[1.02]' : 'bg-gray-50 border-transparent hover:bg-white hover:border-gray-200'}`}
-                    >
-                      <mode.icon className={`mb-4 ${formData.access_config.mode === mode.id ? 'text-blue-500' : 'text-gray-300'}`} size={20} />
-                      <h5 className="font-bold text-sm mb-1">{mode.label}</h5>
-                      <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold leading-none">{mode.desc}</p>
+              <section className="bg-gray-50 border border-gray-100 p-10 rounded-[3.5rem] shadow-inner space-y-10">
+                 <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-400 mb-2">Exhibition Parameters</h4>
+                 <div className="space-y-6">
+                    <div className="space-y-2">
+                       <p className="text-[9px] font-black text-gray-300 uppercase">Access Profile</p>
+                       <select className="w-full bg-white border border-gray-100 px-4 py-3 rounded-xl text-xs font-bold uppercase">
+                          <option>Public Signal</option>
+                          <option>Private Link Only</option>
+                          <option>Whitelisted Only</option>
+                       </select>
                     </div>
-                  ))}
-                </div>
-
-                {formData.access_config.mode === 'password' && (
-                  <div className="p-8 bg-gray-50 rounded-[2rem] border border-gray-100 animate-in slide-in-from-top-4">
-                     <label className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 mb-4 block">Room Passkey</label>
-                     <input 
-                      type="text" 
-                      value={formData.access_config.password}
-                      onChange={e => setFormData({...formData, access_config: {...formData.access_config, password: e.target.value}})}
-                      className="w-full bg-white border-2 border-transparent focus:border-black rounded-xl px-6 py-4 outline-none font-mono text-xl tracking-widest shadow-inner"
-                      placeholder="Define access key..."
-                     />
-                  </div>
-                )}
-
-                {formData.access_config.mode === 'invite_only' && (
-                  <div className="p-8 bg-blue-50 rounded-[2rem] border border-blue-100 space-y-6 animate-in slide-in-from-top-4">
-                     <div className="flex items-center gap-3 text-blue-900">
-                        <Brain size={20} />
-                        <h5 className="font-bold text-sm uppercase tracking-widest">Neural Whitelisting</h5>
-                     </div>
-                     <p className="text-xs text-blue-800/60 leading-relaxed font-light">Identify which Contact Groups or Vector Tags can enter this room automatically.</p>
-                     <div className="flex flex-wrap gap-2">
-                        {['VIP Minimalists', 'High-Intent Leads', 'European Sector'].map(tag => (
-                          <button 
-                            key={tag}
-                            onClick={() => {
-                              const current = formData.access_config.whitelistedTags;
-                              const next = current.includes(tag) ? current.filter(t => t !== tag) : [...current, tag];
-                              setFormData({...formData, access_config: {...formData.access_config, whitelistedTags: next}});
-                            }}
-                            className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
-                              formData.access_config.whitelistedTags.includes(tag) ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-blue-400 border border-blue-100'
-                            }`}
-                          >
-                            {tag}
-                          </button>
-                        ))}
-                     </div>
-                  </div>
-                )}
-
-                {/* Timed Access Controls */}
-                <div className="p-8 border-2 border-gray-50 rounded-[2.5rem] space-y-8">
-                   <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                         <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400"><Clock size={20}/></div>
-                         <div>
-                            <p className="text-sm font-bold">Timed Release Protocol</p>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Auto-transition to Public Spectrum</p>
-                         </div>
-                      </div>
-                      <div className={`w-14 h-8 rounded-full transition-colors relative flex items-center px-1 cursor-pointer ${formData.access_config.timedAccess ? 'bg-blue-500' : 'bg-gray-200'}`} 
-                           onClick={() => setFormData({...formData, access_config: {...formData.access_config, timedAccess: !formData.access_config.timedAccess}})}>
-                        <div className={`w-6 h-6 bg-white rounded-full shadow-md transition-transform ${formData.access_config.timedAccess ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                      </div>
-                   </div>
-
-                   {formData.access_config.timedAccess && (
-                     <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-4">
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-bold uppercase tracking-widest text-gray-300">Publish After (Days)</label>
-                           <select 
-                            className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none"
-                            onChange={e => {
-                               const date = new Date();
-                               date.setDate(date.getDate() + parseInt(e.target.value));
-                               setFormData({...formData, access_config: {...formData.access_config, autoPublishAt: date.toISOString()}});
-                            }}
-                           >
-                              <option value="2">48 Hours (Aggressive)</option>
-                              <option value="7">7 Days (Standard)</option>
-                              <option value="14">14 Days (Exclusive)</option>
-                           </select>
-                        </div>
-                        <div className="bg-blue-50/50 p-4 rounded-xl flex items-center gap-3">
-                           <ShieldCheck className="text-blue-500" size={16} />
-                           <p className="text-[10px] text-blue-800 leading-tight">Assets will remain private until threshold is reached.</p>
-                        </div>
-                     </div>
-                   )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {showArtSelector && (
-        <div className="fixed inset-0 z-[300] bg-white/80 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-300">
-           <div className="w-full max-w-5xl animate-in zoom-in duration-500">
-              <ArtworkSelector 
-                artworks={MOCK_ARTWORKS.map(a => ({ id: a.id, title: a.title, imageUrl: a.imageUrl, artist: a.artist }))}
-                selectedArtworks={formData.selectedArtworkIds}
-                onSelectionChange={(ids) => setFormData({ ...formData, selectedArtworkIds: ids })}
-                onConfirm={() => setShowArtSelector(false)}
-              />
+                    <div className="space-y-2">
+                       <p className="text-[9px] font-black text-gray-300 uppercase">Valuation Display</p>
+                       <div className="flex gap-2">
+                          <button className="flex-1 py-3 bg-black text-white rounded-xl text-[10px] font-black uppercase">Fixed</button>
+                          <button className="flex-1 py-3 bg-white text-gray-400 border border-gray-100 rounded-xl text-[10px] font-black uppercase">Request</button>
+                       </div>
+                    </div>
+                 </div>
+              </section>
            </div>
+
+           {/* Curated Canvas */}
+           <main className="lg:col-span-8 space-y-16">
+              <section className="bg-white border border-gray-100 p-12 rounded-[4rem] shadow-sm space-y-12">
+                 <div className="space-y-4">
+                    <Text variant="label" color="#CCC">Exhibition Title</Text>
+                    <input 
+                      type="text"
+                      value={formData.title}
+                      onChange={e => setFormData({...formData, title: e.target.value})}
+                      placeholder="Identify the narrative..."
+                      className="w-full text-6xl font-serif font-bold italic border-b border-black/5 py-4 focus:border-black outline-none transition-all bg-transparent"
+                    />
+                 </div>
+                 
+                 <div className="space-y-4">
+                    <Text variant="label" color="#CCC">Curatorial Thesis</Text>
+                    <textarea 
+                      value={formData.description}
+                      onChange={e => setFormData({...formData, description: e.target.value})}
+                      placeholder="Draft the statement..."
+                      className="w-full p-8 bg-gray-50 border border-transparent rounded-[3rem] focus:bg-white focus:border-black/10 outline-none transition-all resize-none font-serif italic text-2xl leading-relaxed font-light shadow-inner"
+                      rows={6}
+                    />
+                 </div>
+              </section>
+
+              <section className="space-y-10">
+                 <h3 className="text-xs font-black uppercase tracking-[0.4em] text-gray-300 flex items-center gap-3">
+                    <Layers size={16} className="text-blue-500" /> Linked Composition ({formData.items.length})
+                 </h3>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {formData.items.map((item, idx) => (
+                      <div key={item.id} className="group bg-white border border-gray-100 p-6 rounded-[3.5rem] hover:shadow-2xl hover:border-black transition-all duration-700 relative overflow-hidden">
+                         <div className="aspect-square rounded-[2.5rem] overflow-hidden shadow-xl mb-6 relative">
+                            <img src={item.content.imageUrl} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
+                            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                               <button onClick={() => toggleArtworkLink(item.content.id)} className="p-3 bg-red-500 text-white rounded-full shadow-xl"><Trash2 size={16}/></button>
+                            </div>
+                         </div>
+                         <h4 className="text-2xl font-serif font-bold italic truncate mb-1">{item.content.title}</h4>
+                         <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{item.content.primary_medium} • {item.content.year}</p>
+                         <div className="absolute bottom-6 right-8 text-4xl font-serif font-bold italic text-gray-100 group-hover:text-blue-100 transition-colors">{idx + 1}</div>
+                      </div>
+                    ))}
+                    
+                    <button 
+                      className="aspect-square border-2 border-dashed border-gray-100 rounded-[3.5rem] flex flex-col items-center justify-center gap-4 group hover:bg-gray-50 hover:border-black transition-all duration-500"
+                      onClick={() => toast('Manual selection bridge pending...')}
+                    >
+                       <div className="p-8 bg-white rounded-full shadow-sm group-hover:scale-110 transition-transform">
+                          <Plus size={32} className="text-gray-200 group-hover:text-black" />
+                       </div>
+                       <p className="text-[10px] font-black uppercase tracking-widest text-gray-300 group-hover:text-black">Add Manual Node</p>
+                    </button>
+                 </div>
+              </section>
+           </main>
         </div>
-      )}
+      </Box>
     </div>
   );
 };
