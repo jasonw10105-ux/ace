@@ -1,19 +1,18 @@
 
-import { supabase } from '../lib/supabase'
 import { MEDIA_TAXONOMY, GENRE_TAXONOMY } from '../lib/mediaTaxonomy'
-import { Artwork } from '../types'
+import { Artwork, Roadmap, QuizResult } from '../types'
 
 export interface BanditContext {
   userId: string
   timeOfDay: string
   dayOfWeek: string
-  season: string
   recentViews: string[]
   recentSearches: string[]
   currentBudget?: number
-  sessionDuration: number
-  deviceType: 'mobile' | 'desktop' | 'tablet'
+  deviceType: 'mobile' | 'desktop'
   preferredStyles: string[]
+  roadmap?: Roadmap
+  preferences?: QuizResult
 }
 
 export interface BanditArm {
@@ -52,18 +51,31 @@ interface LinUCBModel {
 }
 
 export class ContextualBanditService {
-  private alpha: number = 0.3
-  private featureDimension: number = 20 
-  private syncDebounceTimer: any = null
-  private dirty: boolean = false
+  private alpha: number = 0.4 // Slightly higher for better exploration
+  private featureDimension: number = 32 // Expanded dimension for roadmap and preference overlap
   private currentModel: LinUCBModel | null = null
   
-  constructor(alpha: number = 0.3) {
+  constructor(alpha: number = 0.4) {
     this.alpha = alpha
   }
 
+  getCurrentContext(userId: string, profile: any, roadmap?: Roadmap): BanditContext {
+    const now = new Date();
+    return {
+      userId,
+      timeOfDay: `${now.getHours()}:${now.getMinutes()}`,
+      dayOfWeek: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][now.getDay()],
+      recentViews: [], // Hydrated by engine
+      recentSearches: [], // Hydrated by engine
+      deviceType: typeof window !== 'undefined' && window.innerWidth < 768 ? 'mobile' : 'desktop',
+      preferredStyles: profile?.preferences?.preferred_styles || [],
+      preferences: profile?.preferences,
+      roadmap
+    };
+  }
+
   artworkToArm(art: Artwork): BanditArm {
-    // Parsing OKLCH string: oklch(70% 0.12 250)
+    // Attempt to extract OKLCH data from the primary palette string
     const oklchMatch = art.palette.primary.match(/oklch\((\d+)%\s+([\d.]+)\s+(\d+)\)/);
     const palette = oklchMatch ? {
       lightness: parseFloat(oklchMatch[1]) / 100,
@@ -75,49 +87,23 @@ export class ContextualBanditService {
       artworkId: art.id,
       features: [], 
       metadata: {
-        medium: art.medium,
-        genre: art.style,
+        medium: art.primary_medium,
+        genre: art.style || 'Contemporary',
         price: art.price,
         colors: art.tags,
         palette,
         artist_id: art.artist,
         popularity_score: (art.engagement?.views || 0) / 5000,
-        recency_score: art.year >= 2024 ? 1.0 : art.year >= 2022 ? 0.7 : 0.4
+        recency_score: art.year >= 2024 ? 1.0 : 0.4
       }
     };
-  }
-
-  getCurrentContext(userId: string): BanditContext {
-    const now = new Date();
-    const userStr = localStorage.getItem('artflow_user');
-    const user = userStr ? JSON.parse(userStr) : {};
-    
-    return {
-      userId,
-      timeOfDay: `${now.getHours()}:00`,
-      dayOfWeek: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][now.getDay()],
-      season: this.getSeason(now.getMonth()),
-      recentViews: user.history?.slice(-10) || [],
-      recentSearches: user.savedSearches?.map((s: any) => s.query).slice(-5) || [],
-      currentBudget: user.preferences?.priceRange?.[1] || 10000,
-      sessionDuration: 0,
-      deviceType: typeof window !== 'undefined' && window.innerWidth < 768 ? 'mobile' : 'desktop',
-      preferredStyles: user.preferences?.favoriteStyles || []
-    };
-  }
-
-  private getSeason(month: number): BanditContext['season'] {
-    if (month >= 2 && month <= 4) return 'spring';
-    if (month >= 5 && month <= 7) return 'summer';
-    if (month >= 8 && month <= 10) return 'autumn';
-    return 'winter';
   }
 
   async getRecommendations(
     context: BanditContext,
     candidateArtworks: BanditArm[],
     numRecommendations: number = 10,
-    explorationRatio: number = 0.2
+    explorationRatio: number = 0.25
   ): Promise<BanditRecommendation[]> {
     try {
       const userModel = await this.getUserModel(context.userId);
@@ -145,53 +131,57 @@ export class ContextualBanditService {
           artworkId: arm.artworkId,
           confidence: Math.min(0.99, arm.expectedReward + (arm.uncertainty * 0.1)),
           reason: isExploration ? 'explore' : 'exploit',
-          explanation: "", // Will be filled by Gemini
+          explanation: "", 
           expectedReward: arm.expectedReward,
           uncertainty: arm.uncertainty
         }
       });
     } catch (error) {
-      console.error('Neural calibration fault:', error);
+      console.error('Contextual Bandit Calibration Fault:', error);
       return [];
     }
   }
 
   private async extractFeatures(arm: BanditArm, context: BanditContext): Promise<number[]> {
     const features = new Array(this.featureDimension).fill(0);
-    // 0-1: Price & Budget alignment
+    
+    // 0: Price Normalization
     features[0] = Math.log(arm.metadata.price + 1) / 12;
-    features[1] = context.currentBudget ? Math.min(1.0, arm.metadata.price / context.currentBudget) : 0.5;
     
-    // 2-3: Temporal & Device Context
-    features[2] = parseInt(context.timeOfDay.split(':')[0]) / 24;
-    features[3] = context.deviceType === 'mobile' ? 1 : 0;
-    
-    // 4-6: Chromatic DNA (OKLCH)
-    if (arm.metadata.palette) {
-      features[4] = arm.metadata.palette.lightness;
-      features[5] = arm.metadata.palette.chroma;
-      features[6] = arm.metadata.palette.hue;
+    // 1-2: Roadmap Constraints (HARD WEIGHTS)
+    if (context.roadmap) {
+       const inBudget = arm.metadata.price <= context.roadmap.budget_max && arm.metadata.price >= context.roadmap.budget_min;
+       features[1] = inBudget ? 1.0 : 0.1;
+       features[2] = context.roadmap.target_styles.includes(arm.metadata.genre) ? 1.0 : 0;
     }
     
-    // 7-12: Media One-Hot
-    const mediums = MEDIA_TAXONOMY.map(m => m.name.toLowerCase());
-    const mIdx = mediums.indexOf(arm.metadata.medium.toLowerCase());
-    if (mIdx >= 0 && mIdx < 6) features[7 + mIdx] = 1;
+    // 3-5: Chromatic Alignment
+    if (arm.metadata.palette) {
+      features[3] = arm.metadata.palette.lightness;
+      features[4] = arm.metadata.palette.chroma;
+      features[5] = arm.metadata.palette.hue;
+    }
     
-    // 13-17: Style One-Hot
-    const genres = GENRE_TAXONOMY.map(g => g.name.toLowerCase());
-    const gIdx = genres.indexOf(arm.metadata.genre.toLowerCase());
-    if (gIdx >= 0 && gIdx < 5) features[13 + gIdx] = 1;
+    // 6-11: Media Taxonomy Overlap
+    const mIdx = MEDIA_TAXONOMY.findIndex(m => m.name.toLowerCase() === arm.metadata.medium.toLowerCase());
+    if (mIdx >= 0 && mIdx < 6) features[6 + mIdx] = 1;
     
-    // 18: Preference overlap (Explicit personalized weight)
-    const hasStylePref = context.preferredStyles.some(s => 
-        s.toLowerCase() === arm.metadata.genre.toLowerCase()
-    );
-    features[18] = hasStylePref ? 1.0 : 0.0;
+    // 12-17: Style Taxonomy Overlap
+    const gIdx = GENRE_TAXONOMY.findIndex(g => g.name.toLowerCase() === arm.metadata.genre.toLowerCase());
+    if (gIdx >= 0 && gIdx < 6) features[12 + gIdx] = 1;
+    
+    // 18-25: Recent Signal Context
+    if (context.recentSearches.some(s => arm.metadata.genre.toLowerCase().includes(s.toLowerCase()))) features[18] = 1.0;
+    if (context.recentViews.includes(arm.artworkId)) features[19] = -1.0; // Negative weight to prevent repetition
 
-    // 19: Global Velocity & Freshness
-    features[19] = (arm.metadata.popularity_score + arm.metadata.recency_score) / 2;
-    
+    // 26-27: Market Metadata
+    features[26] = arm.metadata.popularity_score;
+    features[27] = arm.metadata.recency_score;
+
+    // 28-31: Demographic/Preference Signal
+    if (context.preferences?.preferred_styles.includes(arm.metadata.genre)) features[28] = 0.8;
+    if (context.preferences?.color_preferences.some(cp => arm.metadata.colors.includes(cp))) features[29] = 0.5;
+
     return features;
   }
 
@@ -202,79 +192,22 @@ export class ContextualBanditService {
     return { expectedReward, uncertainty };
   }
 
-  private async updateUserModel(userId: string, features: number[], reward: number): Promise<void> {
-    const model = await this.getUserModel(userId);
-    const outerProduct = this.outerProduct(features, features);
-    const newA = this.matrixAdd(model.A, outerProduct);
-    const rewardFeatures = features.map(f => f * reward);
-    const newB = this.vectorAdd(model.b, rewardFeatures);
-    const newAInverse = this.matrixInverse(newA);
-    const newTheta = this.matrixVectorMultiply(newAInverse, newB);
-    
-    this.currentModel = { A: newA, b: newB, theta: newTheta, AInverse: newAInverse };
-    this.dirty = true;
-
-    localStorage.setItem(`bandit_model_${userId}`, JSON.stringify(this.currentModel));
-    
-    if (this.syncDebounceTimer) clearTimeout(this.syncDebounceTimer);
-    this.syncDebounceTimer = setTimeout(() => this.syncToSupabase(userId), 5000);
-  }
-
-  private async syncToSupabase(userId: string) {
-    if (!this.dirty || !this.currentModel) return;
-    try {
-      await supabase.from('profiles').update({ bandit_model: this.currentModel }).eq('id', userId);
-      this.dirty = false;
-    } catch (e) {
-      console.error('Neural DNA sync failure:', e);
-    }
-  }
-
   private async getUserModel(userId: string): Promise<LinUCBModel> {
     if (this.currentModel) return this.currentModel;
-
     const cached = localStorage.getItem(`bandit_model_${userId}`);
     if (cached) {
       this.currentModel = JSON.parse(cached);
       return this.currentModel!;
     }
-
-    const { data } = await supabase.from('profiles').select('bandit_model').eq('id', userId).single();
-    if (data?.bandit_model) {
-      this.currentModel = data.bandit_model as unknown as LinUCBModel;
-      localStorage.setItem(`bandit_model_${userId}`, JSON.stringify(this.currentModel));
-      return this.currentModel;
-    }
-
     const identity = this.identityMatrix(this.featureDimension);
     const zeros = new Array(this.featureDimension).fill(0);
-    this.currentModel = { A: identity, b: zeros, theta: zeros, AInverse: identity };
-    
-    return this.currentModel;
+    return { A: identity, b: zeros, theta: zeros, AInverse: identity };
   }
 
   private dotProduct(a: number[], b: number[]): number { return a.reduce((sum, val, i) => sum + val * b[i], 0) }
-  private outerProduct(a: number[], b: number[]): number[][] { return a.map(aVal => b.map(bVal => aVal * bVal)) }
-  private matrixAdd(a: number[][], b: number[][]): number[][] { return a.map((row, i) => row.map((val, j) => val + b[i][j])) }
-  private vectorAdd(a: number[], b: number[]): number[] { return a.map((val, i) => val + b[i]) }
   private quadraticForm(x: number[], AInverse: number[][]): number { return this.dotProduct(x, this.matrixVectorMultiply(AInverse, x)) }
   private matrixVectorMultiply(matrix: number[][], vector: number[]): number[] { return matrix.map(row => this.dotProduct(row, vector)) }
   private identityMatrix(size: number): number[][] { return Array(size).fill(0).map((_, i) => Array(size).fill(0).map((_, j) => i === j ? 1 : 0)) }
-  
-  private matrixInverse(matrix: number[][]): number[][] {
-    const n = matrix.length; 
-    const augmented = matrix.map((row, i) => [...row, ...this.identityMatrix(n)[i]]);
-    for (let i = 0; i < n; i++) {
-      let maxRow = i; 
-      for (let k = i + 1; k < n; k++) if (Math.abs(augmented[k][i]) > Math.abs(augmented[maxRow][i])) maxRow = k;
-      [augmented[i], augmented[maxRow]] = [augmented[maxRow], augmented[i]];
-      const pivot = augmented[i][i]; 
-      if (Math.abs(pivot) < 1e-10) continue;
-      for (let j = 0; j < 2 * n; j++) augmented[i][j] /= pivot;
-      for (let k = 0; k < n; k++) if (k !== i) { const factor = augmented[k][i]; for (let j = 0; j < 2 * n; j++) augmented[k][j] -= factor * augmented[i][j]; }
-    }
-    return augmented.map(row => row.slice(n));
-  }
 }
 
 export const contextualBandit = new ContextualBanditService()

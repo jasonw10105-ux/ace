@@ -1,63 +1,81 @@
 
 import { supabase } from '../lib/supabase';
 import { contextualBandit } from './contextualBandit';
-import { geminiService } from './geminiService';
-import { Artwork } from '../types';
+import { Artwork, Roadmap } from '../types';
 import { MOCK_ARTWORKS } from '../constants';
+import { GoogleGenAI } from "@google/genai";
 
 class RecommendationEngine {
-  /**
-   * Core personalized recommendation loop powered by LinUCB and Gemini AI.
-   */
   async getPersonalizedRecommendations(userId: string, limit: number = 6) {
-    const context = contextualBandit.getCurrentContext(userId);
-    
-    // 1. Fetch Candidates (Prioritizing metadata completeness)
-    let pool = MOCK_ARTWORKS;
-    if (pool.length === 0) {
-      const { data, error } = await supabase
-        .from('artworks')
-        .select('*')
-        .eq('status', 'available')
-        .limit(200);
-        
-      if (error) {
-        console.error("Neural Signal Interrupted during pool acquisition.");
-        return [];
-      }
-      pool = (data as Artwork[]) || [];
-    }
+    try {
+      const [profileRes, roadmapRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('collection_roadmaps').select('*').eq('collector_id', userId).eq('is_active', true).single(),
+      ]);
 
-    if (pool.length === 0) return [];
-
-    // 2. Bandit Filtering (Personalized Ranking)
-    const arms = pool.map(art => contextualBandit.artworkToArm(art));
-    const banditResults = await contextualBandit.getRecommendations(context, arms, limit);
-    
-    // 3. Narrative Synthesis via Gemini
-    const enriched = await Promise.all(banditResults.map(async res => {
-      const artwork = pool.find(a => a.id === res.artworkId);
-      if (!artwork) return null;
-
-      const aiExplanation = await geminiService.generateRecommendationNarrative(artwork, context);
+      const profile = profileRes.data;
+      const roadmap = roadmapRes.data as Roadmap;
       
-      return {
-        ...res,
-        artwork,
-        explanation: aiExplanation,
-        matchConfidence: Math.round(res.confidence * 100)
-      };
-    }));
+      const context = contextualBandit.getCurrentContext(userId, profile, roadmap);
 
-    return enriched.filter(Boolean);
+      // HYBRID POOL: Merge Live DB with 500 Test Nodes
+      let pool: Artwork[] = [...MOCK_ARTWORKS];
+      try {
+        const { data: dbArt } = await supabase.from('artworks').select('*').eq('status', 'available').limit(100);
+        if (dbArt && dbArt.length > 0) {
+          pool = [...(dbArt as Artwork[]), ...MOCK_ARTWORKS];
+        }
+      } catch (e) {
+        console.warn("Using offline ledger for recommendations.");
+      }
+
+      // LinUCB Bandit Re-ranking
+      const arms = pool.map(art => contextualBandit.artworkToArm(art));
+      const banditResults = await contextualBandit.getRecommendations(context, arms, limit);
+      
+      const enriched = await Promise.all(banditResults.map(async res => {
+        const artwork = pool.find(a => a.id === res.artworkId);
+        if (!artwork) return null;
+
+        const aiExplanation = await this.generateStrategicNarrative(artwork, context, res.reason);
+        
+        return {
+          ...res,
+          artwork,
+          explanation: aiExplanation,
+          matchConfidence: Math.round(res.confidence * 100)
+        };
+      }));
+
+      return enriched.filter(Boolean);
+    } catch (error) {
+      console.error("Recommendation Sync Interrupt:", error);
+      return [];
+    }
   }
 
-  async calculatePreferenceMatch(artwork: Artwork, profile: any): Promise<number> {
-    return 0.85;
-  }
+  private async generateStrategicNarrative(artwork: Artwork, context: any, reason: 'exploit' | 'explore'): Promise<string> {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    const roadmapContext = context.roadmap 
+      ? `This piece aligns with your '${context.roadmap.title}' strategy targeting ${context.roadmap.target_styles.join(', ')}.`
+      : "Selected based on your core stylistic interaction signals.";
 
-  async calculateBehavioralSignals(artwork: Artwork, profile: any): Promise<number> {
-    return 0.7;
+    const prompt = `Act as ArtFlow Strategist. 
+Evaluate artwork: "${artwork.title}" by ${artwork.artist} (${artwork.style}, ${artwork.primary_medium}).
+Context: ${roadmapContext}
+Mode: ${reason === 'explore' ? 'Aesthetic Drift' : 'Strategic Fit'}.
+Write one brief curatorial sentence on why this is a high-intent match. Use terms like 'tactile resonance', 'chromatic weight', or 'formal rigor'.`;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt
+      });
+      return response.text?.trim() || "Selected for strategic alignment with your collection goals.";
+    } catch {
+      return "Provides essential stylistic contrast for your current collection phase.";
+    }
   }
 }
 

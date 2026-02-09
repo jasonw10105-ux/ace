@@ -1,71 +1,87 @@
 
 import { supabase } from '../lib/supabase';
-// ParsedSearchQuery is not exported from geminiService, it should be imported from types
 import { geminiService } from './geminiService';
-import { MOCK_ARTWORKS } from '../constants';
-import { Artwork, ParsedSearchQuery } from '../types';
-
-export interface ScoredArtwork extends Artwork {
-  relevanceScore: number;
-  matchReasons: string[];
-}
+import { Artwork, ScoredArtwork } from '../types';
 
 export class SearchService {
   async performIntelligentSearch(query: string, userId?: string): Promise<ScoredArtwork[]> {
     const entities = await geminiService.parseSearchQuery(query);
     if (!entities) return [];
 
-    // Weighted Relevance Model Implementation
-    const scored = MOCK_ARTWORKS.map(art => {
+    let pool: Artwork[] = [];
+    try {
+      const { data, error } = await (supabase.from('artworks').select('*').eq('status', 'available').limit(500) as any);
+      if (error) throw error;
+      pool = data || [];
+    } catch (e) {
+      console.error("Live Spectrum Sync Interrupt. Unable to query Supabase.");
+      return [];
+    }
+
+    const scored = pool.map(art => {
       let score = 0;
       const reasons: string[] = [];
 
-      // 1. Text Similarity (40% Weight)
-      const queryWords = query.toLowerCase().split(' ');
-      const artText = `${art.title} ${art.description} ${art.medium} ${art.style}`.toLowerCase();
-      const textMatches = queryWords.filter(w => artText.includes(w) && w.length > 2);
+      // 1. Budget Constraint (Strict Production Filter)
+      if (entities.priceRange) {
+        const { min, max } = entities.priceRange;
+        if (min !== undefined && art.price < min) return null;
+        if (max !== undefined && art.price > max) return null;
+        reasons.push('Strategic budget alignment');
+        score += 20; 
+      }
+
+      const queryWords = query.toLowerCase().split(' ').filter(w => w.length > 2);
+      const artText = `${art.title} ${art.description} ${art.primary_medium} ${art.style} ${art.artist_name || art.artist} ${art.tags?.join(' ') || ''}`.toLowerCase();
+      
+      // 2. Keyword Scoring
+      const textMatches = queryWords.filter(w => artText.includes(w));
       const textScore = (textMatches.length / Math.max(queryWords.length, 1)) * 40;
       score += textScore;
-      if (textScore > 20) reasons.push('Strong textual alignment');
+      if (textScore > 15) reasons.push('Semantic text alignment');
 
-      // 2. Color Overlap (30% Weight)
+      // 3. Style & Medium Meta Scoring
+      if (entities.styles.some(s => art.style?.toLowerCase().includes(s.toLowerCase()))) {
+        score += 25;
+        reasons.push(`${art.style} movement match`);
+      }
+      if (entities.mediums.some(m => art.primary_medium?.toLowerCase().includes(m.toLowerCase()))) {
+        score += 25;
+        reasons.push(`Materiality: ${art.primary_medium}`);
+      }
+
+      // 4. Chromatic / Atmospheric Alignment
       const colorMatches = entities.colors.filter(c => 
-        art.tags.some(tag => tag.toLowerCase().includes(c.toLowerCase()))
+        art.tags?.some(tag => tag.toLowerCase().includes(c.toLowerCase())) ||
+        art.palette?.primary?.toLowerCase().includes(c.toLowerCase()) ||
+        artText.includes(c.toLowerCase())
       );
-      const colorScore = (colorMatches.length / Math.max(entities.colors.length, 1)) * 30;
-      score += colorScore;
-      if (colorScore > 15) reasons.push('Chromatic DNA match');
+      if (colorMatches.length > 0) {
+        score += 20;
+        reasons.push('Chromatic frequency match');
+      }
 
-      // 3. Metadata Matching (20% Weight)
-      let metaScore = 0;
-      if (entities.mediums.some(m => art.medium.toLowerCase().includes(m.toLowerCase()))) metaScore += 10;
-      if (entities.styles.some(s => art.style.toLowerCase().includes(s.toLowerCase()))) metaScore += 10;
-      score += metaScore;
-      if (metaScore >= 10) reasons.push('Structural metadata match');
-
-      // 4. User Preference Alignment (10% Weight)
-      // Simulation of preference boost
-      const prefScore = 5; 
-      score += prefScore;
-
-      // 5. Recency Boost
-      const isRecent = new Date(art.created_at).getTime() > Date.now() - (30 * 24 * 60 * 60 * 1000);
-      if (isRecent) score += 5;
+      // 5. Atmospheric Subject Logic
+      const subjectMatches = (entities.subjects || []).filter(sub => artText.includes(sub.toLowerCase()));
+      if (subjectMatches.length > 0) {
+        score += 30;
+        reasons.push('Conceptual subject match');
+      }
 
       return {
         ...art,
         relevanceScore: Math.min(100, score),
-        matchReasons: reasons
+        matchReasons: Array.from(new Set(reasons))
       };
-    });
+    }).filter(Boolean) as ScoredArtwork[];
 
     return scored
-      .filter(a => a.relevanceScore > 15)
+      .filter((a) => a.relevanceScore > 10)
       .sort((a, b) => b.relevanceScore - a.relevanceScore);
   }
 
   async getTrendingSearches() {
-    return ['Brutalist Oils', 'Neo-Tokyo Midnight', 'High Chroma Abstraction'];
+    return ['Cyber-Realism Berlin', 'Minimalist Synthesis', 'Large Scale Abstraction', 'Brutalist Monochromes', 'Oil on Linen under $10k'];
   }
 }
 
