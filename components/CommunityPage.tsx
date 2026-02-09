@@ -1,15 +1,22 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   Heart, Sparkles, User, ShieldCheck, Zap, 
   TrendingUp, Globe, Layers, ArrowRight,
   Eye, Activity, MessageSquare, Compass,
-  MapPin
+  MapPin, Lock
 } from 'lucide-react';
 import { Box, Flex, Text, Button, Grid, Separator } from '../flow';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { UserProfile } from '../types';
 
-const CommunityPage: React.FC = () => {
+interface CommunityPageProps {
+  user: UserProfile | null;
+}
+
+const CommunityPage: React.FC<CommunityPageProps> = ({ user }) => {
+  const navigate = useNavigate();
+  
   const pulseEvents = [
     { 
       type: 'acquisition', 
@@ -101,22 +108,45 @@ const CommunityPage: React.FC = () => {
               </div>
 
               <div className="pt-20">
-                 <section className="bg-black text-white p-16 rounded-[5rem] shadow-2xl relative overflow-hidden group">
+                 {user ? (
+                   <section className="bg-black text-white p-16 rounded-[5rem] shadow-2xl relative overflow-hidden group border border-blue-500/20">
                     <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 blur-[120px] rounded-full group-hover:scale-150 transition-transform duration-1000"></div>
                     <div className="relative z-10">
                        <Flex align="center" gap={4} mb={10}>
                           <Compass size={24} className="text-blue-400" />
                           <span className="text-[11px] font-black uppercase tracking-[0.5em] text-blue-400">Intelligence Spotlight</span>
                        </Flex>
-                       <h2 className="text-6xl font-serif font-bold italic leading-tight tracking-tight mb-8">The Rise of <br/>Cyber-Brutalism.</h2>
-                       <p className="text-2xl text-gray-400 font-light leading-relaxed max-w-2xl mb-12">
-                         Market interaction signals indicate a <span className="text-white font-bold">+34% surge</span> in high-contrast industrial textures. This movement is establishing a new tactical segment for Q3.
-                       </p>
-                       <button className="px-12 py-5 bg-white text-black rounded-[2rem] font-bold text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-white/10 flex items-center gap-4">
-                          Explore Segment <ArrowRight size={18} />
+                       {user.role === 'ARTIST' ? (
+                          <>
+                            <h2 className="text-6xl font-serif font-bold italic leading-tight tracking-tight mb-8">Demand for <br/>{user.preferences?.favoriteStyles?.[0] || 'Contemporary'} forms.</h2>
+                            <p className="text-2xl text-gray-400 font-light leading-relaxed max-w-2xl mb-12">
+                              Your creative niche is currently seeing an <span className="text-white font-bold">+18% increase</span> in collector dwelling time. High potential for private acquisitions in the Berlin sector.
+                            </p>
+                          </>
+                       ) : (
+                          <>
+                            <h2 className="text-6xl font-serif font-bold italic leading-tight tracking-tight mb-8">Recalibrating your <br/>Aesthetic Thesis.</h2>
+                            <p className="text-2xl text-gray-400 font-light leading-relaxed max-w-2xl mb-12">
+                              The frontier is shifting toward textural minimalism. Based on your Roadmap, we recommend looking at <span className="text-white font-bold">Berlin-based sculptors</span> for your next vault anchor.
+                            </p>
+                          </>
+                       )}
+                       <button 
+                        onClick={() => navigate(user.role === 'ARTIST' ? '/market-intelligence' : '/roadmap')}
+                        className="px-12 py-5 bg-white text-black rounded-[2rem] font-bold text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-white/10 flex items-center gap-4"
+                       >
+                          Analyze My Sector <ArrowRight size={18} />
                        </button>
                     </div>
-                 </section>
+                   </section>
+                 ) : (
+                   <section className="bg-gray-50 border border-dashed border-gray-300 p-16 rounded-[5rem] text-center">
+                      <Lock size={48} className="mx-auto text-gray-300 mb-8" />
+                      <h2 className="text-4xl font-serif font-bold italic mb-4">Deep Intelligence Locked.</h2>
+                      <p className="text-gray-400 max-w-xl mx-auto mb-10 text-xl font-light">Join the Frontier as an Artist or Collector to access neural market insights and personalized discovery signals.</p>
+                      <Button onClick={() => navigate('/auth')}>Identity Verification Required</Button>
+                   </section>
+                 )}
               </div>
            </main>
 
@@ -128,7 +158,7 @@ const CommunityPage: React.FC = () => {
                     {['Elena Vance', 'Kenji Sato', 'Sasha Novak'].map((artist, idx) => (
                       <div key={idx} className="flex items-center gap-5 group cursor-pointer">
                          <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-white shadow-lg grayscale group-hover:grayscale-0 transition-all">
-                            <img src={`https://picsum.photos/seed/${artist}/100`} />
+                            <img src={`https://picsum.photos/seed/${artist}/100`} alt={artist} />
                          </div>
                          <div className="flex-1">
                             <p className="font-bold text-sm leading-none mb-1">{artist}</p>
@@ -140,7 +170,7 @@ const CommunityPage: React.FC = () => {
                       </div>
                     ))}
                  </div>
-                 <button className="w-full mt-10 py-4 border border-gray-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-black hover:border-black transition-all">View All Creators</button>
+                 <button onClick={() => navigate('/artists')} className="w-full mt-10 py-4 border border-gray-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-black hover:border-black transition-all">View All Creators</button>
               </section>
 
               <section className="bg-white border border-gray-100 p-10 rounded-[3.5rem] shadow-sm space-y-8">

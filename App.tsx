@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { supabase } from './lib/supabase';
 import { NavigationProvider } from './components/NavigationProvider';
 import HomePage from './components/HomePage';
@@ -44,6 +45,16 @@ import { Artwork, UserProfile, UserRole, QuizResult } from './types';
 import { FlowProvider, Box, Flex, Text, Button } from './flow';
 import { MOCK_ARTWORKS } from './constants';
 import toast from 'react-hot-toast';
+
+// Initialize the query client for the entire app state
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const AppContent: React.FC<{ 
   user: UserProfile | null; 
@@ -123,7 +134,7 @@ const AppContent: React.FC<{
       'Calendar': '/calendar', 'Frontier Network': '/artists', 'Taste Matches': '/advisor',
       'Saved Works': '/favorites', 'My Artworks': '/registry', 'Upload New': '/upload-new',
       'Create Catalogue': '/create-catalogue', 'Lead Intelligence': '/crm', 'Sales Overview': '/sales',
-      'Market Trends': '/market-intelligence', 'Settings': '/signals', 'Signals': '/signals',
+      'Market Trends': '/market-intelligence', 'Settings': '/settings', 'Signals': '/signals',
       'Scheme Architect': '/workspace', 'Vault Audit': '/audit', 'Press Pack': '/press-pack'
     };
     navigate(routeMap[item] || '/dashboard');
@@ -154,9 +165,11 @@ const AppContent: React.FC<{
               <Route path="/artists" element={<ArtistsPage />} />
               <Route path="/artist/:id" element={<ArtistProfile />} />
               <Route path="/catalogues" element={<BrowseCataloguesPage />} />
-              <Route path="/community" element={<CommunityPage />} />
+              <Route path="/community" element={<CommunityPage user={user} />} />
               <Route path="/search" element={<SearchResultsPage />} />
-              <Route path="/explore" element={<IntelligentExplorePage />} />
+              
+              {/* Restricted Discovery Routes */}
+              <Route path="/explore" element={user ? <IntelligentExplorePage user={user} /> : <Navigate to="/auth" />} />
               <Route path="/waitlist" element={<WaitlistPage />} />
               <Route path="/auth" element={<AuthFlow onComplete={handleAuthComplete} onBackToHome={() => navigate('/')} />} />
               <Route path="/recovery" element={<RecoveryFlow onBack={() => navigate('/auth')} onComplete={() => navigate('/dashboard')} />} />
@@ -176,6 +189,8 @@ const AppContent: React.FC<{
               <Route path="/audit" element={user ? <CollectionAudit onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
               <Route path="/press-pack" element={user ? <ArtistPressPack artworks={userArtworks} onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
               <Route path="/artwork/:id" element={<ArtworkDetail />} />
+              <Route path="/advisor" element={user ? <LiveArtAdvisor onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+              
               <Route path="/upload-new" element={user?.role !== 'COLLECTOR' ? <ArtworkCreate onSave={() => navigate('/dashboard')} onCancel={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
               <Route path="/create-catalogue" element={user?.role !== 'COLLECTOR' ? <CatalogueCreate onSave={() => navigate('/dashboard')} onCancel={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
             </Routes>
@@ -202,12 +217,15 @@ const App: React.FC = () => {
     setUser(null);
     setVaultVerified(false);
   };
+  
   return (
-    <FlowProvider>
-      <BrowserRouter>
-        <AppContent user={user} setUser={setUser} logout={logout} vaultVerified={vaultVerified} setVaultVerified={setVaultVerified} />
-      </BrowserRouter>
-    </FlowProvider>
+    <QueryClientProvider client={queryClient}>
+      <FlowProvider>
+        <BrowserRouter>
+          <AppContent user={user} setUser={setUser} logout={logout} vaultVerified={vaultVerified} setVaultVerified={setVaultVerified} />
+        </BrowserRouter>
+      </FlowProvider>
+    </QueryClientProvider>
   );
 };
 

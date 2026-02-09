@@ -1,8 +1,13 @@
 
 import React, { useState } from 'react'
 import { Sparkles, Search, Settings, RefreshCw, Zap, Brain, Camera } from 'lucide-react'
+import { UserProfile } from '../types'
 
-const IntelligentExplorePage: React.FC = () => {
+interface Props {
+  user: UserProfile;
+}
+
+const IntelligentExplorePage: React.FC<Props> = ({ user }) => {
   const [activeTab, setActiveTab] = useState<'discover' | 'serendipity'>('discover')
 
   return (
@@ -12,7 +17,7 @@ const IntelligentExplorePage: React.FC = () => {
             <Zap size={14} /> Synthesis Alpha
           </div>
           <h1 className="text-6xl font-serif font-bold italic tracking-tight">Intelligent Explore.</h1>
-          <p className="text-gray-400 mt-4 text-xl font-light">The neural interface for aesthetic discovery.</p>
+          <p className="text-gray-400 mt-4 text-xl font-light">Welcome, <span className="text-black font-medium italic">{user.display_name || user.full_name || 'Explorer'}</span>. The neural interface for aesthetic discovery.</p>
        </header>
 
        <div className="bg-white border border-gray-100 rounded-[3rem] p-12 shadow-sm mb-12">
@@ -38,8 +43,8 @@ const IntelligentExplorePage: React.FC = () => {
              <div className="lg:col-span-2 space-y-8">
                 <div className="h-96 bg-gray-50 rounded-[3rem] flex flex-col items-center justify-center text-center p-20 border-2 border-dashed border-gray-100">
                    <Brain size={64} className="text-gray-100 mb-8" />
-                   <h3 className="text-3xl font-serif font-bold italic text-gray-200">Engine Calibrating.</h3>
-                   <p className="text-gray-400 max-w-xs mt-4">Input a search query or reaction to begin the neural discovery loop.</p>
+                   <h3 className="text-3xl font-serif font-bold italic text-gray-200">Neural Calibration Active.</h3>
+                   <p className="text-gray-400 max-w-xs mt-4">Based on your {user.role.toLowerCase()} profile, we are prioritizing {user.preferences?.favoriteStyles?.[0] || 'contemporary'} signals.</p>
                 </div>
              </div>
 
@@ -52,7 +57,7 @@ const IntelligentExplorePage: React.FC = () => {
                 <div className="bg-gray-50 p-10 rounded-[3rem] border border-gray-100">
                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-6">Aesthetic Tags</h4>
                    <div className="flex flex-wrap gap-2">
-                      {['Abstract', 'Warm Tone', 'Organic', 'Surreal'].map(t => (
+                      {(user.preferences?.favoriteStyles || ['Abstract', 'Minimalist', 'Organic']).map(t => (
                         <span key={t} className="px-4 py-2 bg-white border border-gray-100 rounded-lg text-xs font-bold uppercase tracking-widest text-gray-400">#{t}</span>
                       ))}
                    </div>

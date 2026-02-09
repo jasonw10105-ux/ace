@@ -3,8 +3,7 @@ import React, { useState } from 'react';
 import { Mail, ArrowRight, CheckCircle, Palette, User, Globe, Sparkles, Cpu } from 'lucide-react';
 import { waitlistService } from '../services/waitlistService';
 import toast from 'react-hot-toast';
-// Fix: Import Box component from the flow UI library
-import { Box } from '../flow';
+import { Box, Flex, Text, Button } from '../flow';
 
 type Role = 'artist' | 'collector' | 'both';
 
@@ -22,14 +21,21 @@ const WaitlistPage: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    const success = await waitlistService.joinWaitlist(email, role);
-    setIsSubmitting(false);
-
-    if (success) {
-      setIsSuccess(true);
-      toast.success('Signal Recorded');
-    } else {
-      toast.error('Connection Interrupt. Please try again.');
+    try {
+      // service handles local fallback if supabase is unreachable
+      const success = await waitlistService.joinWaitlist(email, role);
+      if (success) {
+        setIsSuccess(true);
+        toast.success('Signal Recorded Successfully');
+      } else {
+        throw new Error('Capture failed');
+      }
+    } catch (err) {
+      // Even if the network fails completely, the service should return true (local capture)
+      // This is a safety catch for severe local environment issues.
+      toast.error('Connection Interrupt. Please check your network.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -50,7 +56,7 @@ const WaitlistPage: React.FC = () => {
           onClick={() => window.location.reload()}
           className="mt-12 text-xs font-bold uppercase tracking-[0.3em] text-gray-400 hover:text-black border-b border-gray-100 pb-2 transition-all"
         >
-          Return
+          Return to Entrance
         </button>
       </div>
     );
@@ -58,8 +64,6 @@ const WaitlistPage: React.FC = () => {
 
   return (
     <div className="min-h-screen pt-40 pb-20 bg-white">
-      <title>Join the Waitlist | ArtFlow</title>
-
       <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-24 items-center">
         <div className="space-y-12 animate-in slide-in-from-left duration-1000">
           <div>

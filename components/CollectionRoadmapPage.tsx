@@ -4,9 +4,9 @@ import { Helmet } from 'react-helmet-async';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Target, TrendingUp, Compass, ArrowLeft, Plus, 
+  Target, TrendingUp, Compass, ArrowLeft, 
   CheckCircle, Brain, Zap, Activity, Layers, 
-  Palette, ArrowRight, ShieldCheck, Loader2, Sparkles
+  ArrowRight, ShieldCheck, Loader2, Sparkles, Plus
 } from 'lucide-react';
 import { Roadmap } from '../types';
 import { geminiService } from '../services/geminiService';
@@ -37,6 +37,8 @@ const CollectionRoadmapPage: React.FC<Props> = ({ onBack, onFinalizeCalibration 
         .select('*')
         .eq('collector_id', user.id)
         .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .limit(1)
         .single();
       if (data) setRoadmap(data as Roadmap);
     }
@@ -52,9 +54,11 @@ const CollectionRoadmapPage: React.FC<Props> = ({ onBack, onFinalizeCalibration 
       const suggested = await geminiService.analyzeRoadmapDraft(missionInput);
       if (suggested) {
         const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Authentication required");
+
         const newRoadmap = {
           ...suggested,
-          collector_id: user?.id,
+          collector_id: user.id,
           is_active: true,
           progress_percentage: 0,
           updated_at: new Date().toISOString()
@@ -70,15 +74,24 @@ const CollectionRoadmapPage: React.FC<Props> = ({ onBack, onFinalizeCalibration 
         setRoadmap(data as Roadmap);
         toast.success('Strategic Roadmap Calibrated.', { id: calibrationToast });
         setMissionInput('');
+        if (onFinalizeCalibration) onFinalizeCalibration();
       }
-    } catch (e) {
-      toast.error('Synthesis Interrupt.', { id: calibrationToast });
+    } catch (e: any) {
+      console.error("Synthesis error", e);
+      toast.error('Synthesis Interrupt. Check registry connectivity.', { id: calibrationToast });
     } finally {
       setIsSynthesizing(false);
     }
   };
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-black" /></div>;
+  if (isLoading) return (
+    <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="flex flex-col items-center gap-4">
+        <Loader2 className="animate-spin text-black" size={32} />
+        <p className="text-[10px] font-black uppercase tracking-widest text-gray-300">Synchronizing Thesis...</p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-32 animate-in fade-in duration-700">
@@ -90,7 +103,7 @@ const CollectionRoadmapPage: React.FC<Props> = ({ onBack, onFinalizeCalibration 
              <ArrowLeft size={16} className="group-hover:-translate-x-1" /> Return to Vault
           </button>
           <div className="flex items-center gap-4 mb-4">
-             <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl border border-blue-100">
+             <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl border border-blue-100 shadow-inner">
                 <Compass size={32} />
              </div>
              <h1 className="text-7xl font-serif font-bold italic tracking-tighter">Roadmap.</h1>
@@ -115,7 +128,7 @@ const CollectionRoadmapPage: React.FC<Props> = ({ onBack, onFinalizeCalibration 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-20">
          {/* Calibration Input */}
          <div className="lg:col-span-8 space-y-16">
-            <section className="bg-black text-white p-16 rounded-[5rem] shadow-2xl relative overflow-hidden group">
+            <section className="bg-black text-white p-16 rounded-[5rem] shadow-2xl relative overflow-hidden group border border-white/5">
                <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-600/10 blur-[150px] rounded-full group-hover:scale-150 transition-transform duration-1000"></div>
                <div className="relative z-10">
                   <div className="flex items-center gap-4 mb-12">
@@ -127,44 +140,44 @@ const CollectionRoadmapPage: React.FC<Props> = ({ onBack, onFinalizeCalibration 
                     <textarea 
                       value={missionInput}
                       onChange={(e) => setMissionInput(e.target.value)}
-                      placeholder="e.g. I want to build a core of large-scale minimalist oils from African artists, budget $50k over 18 months..."
-                      className="w-full bg-white/5 border border-white/10 rounded-[2.5rem] p-10 text-2xl font-serif italic outline-none focus:border-blue-500 focus:bg-white/10 transition-all resize-none min-h-[250px] placeholder:text-white/10"
+                      placeholder="e.g. I want to build a core of large-scale minimalist oils from African female artists, budget $50k over 18 months..."
+                      className="w-full bg-white/5 border border-white/10 rounded-[2.5rem] p-10 text-2xl font-serif italic outline-none focus:border-blue-500 focus:bg-white/10 transition-all resize-none min-h-[300px] placeholder:text-white/10"
                     />
                     <button 
                       onClick={handleMissionSynthesis}
                       disabled={isSynthesizing || !missionInput.trim()}
-                      className="absolute right-6 bottom-6 p-8 bg-blue-600 text-white rounded-full hover:scale-110 transition-all shadow-2xl shadow-blue-600/40 disabled:opacity-20"
+                      className="absolute right-8 bottom-8 p-10 bg-blue-600 text-white rounded-full hover:scale-110 active:scale-95 transition-all shadow-2xl shadow-blue-600/40 disabled:opacity-20"
                     >
-                      {isSynthesizing ? <Loader2 className="animate-spin" size={32} /> : <ArrowRight size={32} />}
+                      {isSynthesizing ? <Loader2 className="animate-spin" size={40} /> : <ArrowRight size={40} />}
                     </button>
                   </div>
-                  <p className="mt-8 text-gray-500 text-[10px] font-bold uppercase tracking-[0.3em]">Your natural language intent is translated into quarterly milestones and filter bias.</p>
+                  <p className="mt-8 text-gray-500 text-[10px] font-bold uppercase tracking-[0.3em]">Your natural language intent is translated into quarterly milestones and filtered recommendations.</p>
                </div>
             </section>
 
             {roadmap && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in slide-in-from-bottom-8 duration-700">
-                 <div className="bg-white border border-gray-100 p-12 rounded-[4rem] shadow-sm space-y-8">
+                 <div className="bg-white border border-gray-100 p-12 rounded-[4rem] shadow-sm space-y-10 group hover:border-black transition-all">
                     <h3 className="text-xs font-black uppercase tracking-[0.4em] text-gray-300 flex items-center gap-3">
                        <Target size={16} className="text-blue-500" /> Capital Allocation
                     </h3>
-                    <div className="space-y-2">
-                       <p className="text-[10px] font-black text-gray-400 uppercase">Target Segment</p>
+                    <div className="space-y-3">
+                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Target Segment</p>
                        <p className="text-4xl font-serif font-bold italic">${roadmap.budget_min.toLocaleString()} — ${roadmap.budget_max.toLocaleString()}</p>
                     </div>
                     <div className="pt-8 border-t border-gray-50 flex justify-between">
                        <div>
-                          <p className="text-[9px] font-black text-gray-300 uppercase">Horizon</p>
-                          <p className="font-bold text-lg">{roadmap.timeline_months} Months</p>
+                          <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-1">Horizon</p>
+                          <p className="font-bold text-xl">{roadmap.timeline_months} Months</p>
                        </div>
                        <div className="text-right">
-                          <p className="text-[9px] font-black text-gray-300 uppercase">Risk Profile</p>
-                          <p className="font-bold text-lg uppercase tracking-tighter text-blue-600">{roadmap.rarity_bias || 'Diversified'}</p>
+                          <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-1">Risk Profile</p>
+                          <p className="font-bold text-xl uppercase tracking-tighter text-blue-600">{roadmap.rarity_bias || 'Diversified'}</p>
                        </div>
                     </div>
                  </div>
 
-                 <div className="bg-gray-50 border border-gray-100 p-12 rounded-[4rem] shadow-inner space-y-8">
+                 <div className="bg-gray-50 border border-gray-100 p-12 rounded-[4rem] shadow-inner space-y-10 group hover:bg-white hover:border-black transition-all">
                     <h3 className="text-xs font-black uppercase tracking-[0.4em] text-gray-300 flex items-center gap-3">
                        <Layers size={16} className="text-blue-500" /> Curatorial Focus
                     </h3>
@@ -176,7 +189,7 @@ const CollectionRoadmapPage: React.FC<Props> = ({ onBack, onFinalizeCalibration 
                          <span key={m} className="px-4 py-2 bg-blue-50 border border-blue-100 rounded-xl text-[10px] font-bold uppercase text-blue-500">#{m}</span>
                        ))}
                     </div>
-                    <p className="text-sm text-gray-400 italic font-light leading-relaxed">
+                    <p className="text-lg text-gray-500 italic font-light leading-relaxed">
                        "Discovering {roadmap.target_styles[0]} works specifically in the {roadmap.target_mediums[0]} medium to anchor your primary collection node."
                     </p>
                  </div>
@@ -194,7 +207,7 @@ const CollectionRoadmapPage: React.FC<Props> = ({ onBack, onFinalizeCalibration 
                <div className="space-y-10">
                   <div className="flex justify-between items-end">
                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Roadmap Maturity</span>
-                     <span className="text-3xl font-serif font-bold italic">{roadmap?.progress_percentage || 0}%</span>
+                     <span className="text-4xl font-serif font-bold italic">{roadmap?.progress_percentage || 0}%</span>
                   </div>
                   <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                      <div 
@@ -202,30 +215,30 @@ const CollectionRoadmapPage: React.FC<Props> = ({ onBack, onFinalizeCalibration 
                       style={{ width: `${roadmap?.progress_percentage || 0}%` }}
                      />
                   </div>
-                  <div className="space-y-6 pt-4">
-                     <div className="flex gap-4 items-center opacity-100">
-                        <CheckCircle size={18} className="text-blue-500" />
-                        <span className="text-xs font-bold text-gray-900 uppercase">Identity & Thesis Synchronized</span>
+                  <div className="space-y-6 pt-6">
+                     <div className="flex gap-5 items-center opacity-100 group/item">
+                        <CheckCircle size={20} className="text-blue-500" />
+                        <span className="text-xs font-bold text-gray-900 uppercase tracking-widest">Identity & Thesis Sync</span>
                      </div>
-                     <div className="flex gap-4 items-center opacity-40">
-                        <div className="w-[18px] h-[18px] border-2 border-gray-200 rounded-full" />
-                        <span className="text-xs font-bold text-gray-400 uppercase">First Signal Acquisition</span>
+                     <div className="flex gap-5 items-center opacity-40">
+                        <div className="w-[20px] h-[20px] border-2 border-gray-200 rounded-full" />
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">First Signal Acquisition</span>
                      </div>
-                     <div className="flex gap-4 items-center opacity-40">
-                        <div className="w-[18px] h-[18px] border-2 border-gray-200 rounded-full" />
-                        <span className="text-xs font-bold text-gray-400 uppercase">Series Expansion (3+ Assets)</span>
+                     <div className="flex gap-5 items-center opacity-40">
+                        <div className="w-[20px] h-[20px] border-2 border-gray-200 rounded-full" />
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Series Expansion</span>
                      </div>
                   </div>
                </div>
             </div>
 
-            <div className="p-12 bg-blue-50 border border-blue-100 rounded-[4rem] space-y-8">
-               <ShieldCheck size={32} className="text-blue-600" />
-               <h4 className="text-2xl font-serif font-bold italic leading-tight">Advisor Guard.</h4>
+            <div className="p-12 bg-blue-50 border border-blue-100 rounded-[4rem] space-y-8 shadow-inner">
+               <ShieldCheck size={40} className="text-blue-600" />
+               <h4 className="text-3xl font-serif font-bold italic leading-tight">Advisor Guard.</h4>
                <p className="text-sm text-blue-800/60 leading-relaxed font-light">
-                 Your strategic targets are end-to-end encrypted. No artist or 3rd party can see your budget or roadmap progression.
+                 Your strategic targets and financial thresholds are end-to-end encrypted. No artist or gallery can see your roadmap progression.
                </p>
-               <button className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-blue-600/20">
+               <button className="w-full py-5 bg-blue-600 text-white rounded-2xl font-bold text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-blue-600/20">
                   Request Privacy Audit
                </button>
             </div>
