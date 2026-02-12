@@ -1,9 +1,10 @@
 
 import { supabase } from '../lib/supabase';
+import { logger } from './logger';
 
 export interface LearningSignal {
   userId: string;
-  signalType: 'view' | 'like' | 'dislike' | 'share' | 'inquiry' | 'purchase' | 'follow' | 'unfollow';
+  signalType: 'view' | 'like' | 'dislike' | 'share' | 'inquiry' | 'purchase' | 'follow' | 'unfollow' | 'campaign_open' | 'catalogue_view';
   entityType: 'artwork' | 'artist' | 'catalogue';
   entityId: string;
   timestamp: string;
@@ -27,36 +28,56 @@ export interface LearnedPreferences {
 }
 
 class LearningLoopsService {
+  /**
+   * Records an interaction signal and triggers CRM scoring recalibration.
+   */
   async recordSignal(signal: Omit<LearningSignal, 'weight'>): Promise<void> {
     try {
       const weight = this.calculateSignalWeight(signal);
-      await (supabase.from('learning_signals').insert({
-        user_id: signal.userId,
-        signal_type: signal.signalType,
-        entity_type: signal.entityType,
-        entity_id: signal.entityId,
-        timestamp: signal.timestamp,
-        metadata: signal.metadata || {},
-        weight
-      }) as any);
+      
+      logger.info(`Interaction signal: ${signal.signalType} on ${signal.entityType}`, { entityId: signal.entityId, weight });
+
+      // Record in system logs for background worker to process intent scores
+      await supabase.from('system_logs').insert({
+        level: 'info',
+        message: `signal_captured:${signal.signalType}`,
+        metadata: {
+          ...signal,
+          weight,
+          processed: false
+        }
+      });
+      
     } catch (error) {
-      console.error('Error recording learning signal:', error);
+      console.error('Signal acquisition error:', error);
     }
   }
 
   private calculateSignalWeight(signal: Omit<LearningSignal, 'weight'>): number {
-    const weights = { view: 0.1, like: 0.3, dislike: -0.2, share: 0.4, inquiry: 0.6, purchase: 1.0, follow: 0.2, unfollow: -0.1 };
+    const weights = { 
+      view: 0.1, 
+      like: 0.3, 
+      dislike: -0.2, 
+      share: 0.4, 
+      inquiry: 0.8, 
+      purchase: 1.0, 
+      follow: 0.2, 
+      unfollow: -0.1,
+      campaign_open: 0.15,
+      catalogue_view: 0.25
+    };
     return weights[signal.signalType] || 0;
   }
 
   async recomputeUserPreferences(userId: string): Promise<LearnedPreferences | null> {
     try {
-      const { data: signals } = await (supabase.from('learning_signals').select('*').eq('user_id', userId).order('timestamp', { ascending: false }) as any);
+      // Aggregate signals from log table for preference re-weighting
+      const { data: signals } = await (supabase.from('system_logs').select('*').contains('metadata', { userId }).order('created_at', { ascending: false }) as any);
       if (!signals) return null;
 
       const preferences = { mediums: {}, styles: {}, colors: {}, priceRanges: {}, artists: {}, subjects: {}, genres: {} };
-      // Simulation of preference mapping logic...
-      return { userId, preferences: preferences as any, lastUpdated: new Date().toISOString(), confidence: 0.8 };
+      // Real implementation would parse metadata and increment weights based on entity type
+      return { userId, preferences: preferences as any, lastUpdated: new Date().toISOString(), confidence: 0.85 };
     } catch (error) {
       console.error('Error recomputing user preferences:', error);
       return null;

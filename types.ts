@@ -6,6 +6,12 @@ export type ArtworkStatus = 'available' | 'sold' | 'reserved' | 'archive' | 'dra
 export type EditionType = 'unique' | 'limited' | 'open';
 export type CollectorArchetype = 'The Scholar' | 'The Visionary' | 'The Investor' | 'The Impulse Buyer';
 
+export interface SocialLinks {
+  instagram?: string;
+  twitter?: string;
+  linkedin?: string;
+}
+
 export interface QuizResult {
   preferred_styles: string[];
   preferred_genres: string[];
@@ -17,33 +23,10 @@ export interface QuizResult {
   experience_level: 'beginner' | 'intermediate' | 'advanced' | 'expert';
   collecting_focus: 'investment' | 'personal' | 'decorative' | 'cultural';
   risk_tolerance: 'conservative' | 'moderate' | 'aggressive';
-  // Added for compatibility with EnhancedCollectorSettings
   favoriteMediums?: string[];
   favoriteStyles?: string[];
   priceRange?: [number, number];
   learnedInterests?: string[];
-}
-
-export interface Roadmap {
-  id?: string;
-  collector_id?: string;
-  title: string;
-  description?: string;
-  budget_min: number;
-  budget_max: number;
-  target_mediums: string[];
-  target_styles: string[];
-  target_artist_ids: string[];
-  target_genres: string[];
-  target_colors: string[];
-  target_price_range: { min: number; max: number };
-  timeline_months: number;
-  is_active: boolean;
-  progress_percentage: number;
-  updated_at?: string;
-  // Investment Specifics
-  rarity_bias: 'blue_chip' | 'emerging' | 'diversified';
-  liquidity_focus: number; // 1-10
 }
 
 export interface Artwork {
@@ -51,8 +34,8 @@ export interface Artwork {
   user_id: string;
   slug: string;
   title: string;
-  description?: string; // Curatorial description (Artist Led)
-  artist_statement?: string; // Deep narrative context
+  description?: string; 
+  artist_statement?: string; 
   price: number;
   status: ArtworkStatus;
   primary_medium: string;
@@ -89,6 +72,7 @@ export interface Artwork {
 export interface UserProfile {
   id: string;
   email: string;
+  username: string; // Mandatory for public URLs
   full_name?: string;
   display_name?: string;
   bio?: string;
@@ -100,62 +84,22 @@ export interface UserProfile {
   preferences: QuizResult | null;
   settings: any;
   website?: string;
-  social_links?: any;
+  social_links?: SocialLinks;
   savedSearches?: SavedSearch[];
+  tags?: string[];
 }
 
-export interface EngagementSignal {
+export interface SavedSearch {
   id: string;
-  collectorName: string;
-  collectorId: string;
-  artworkId: string;
-  artworkTitle: string;
-  intensity: number;
+  query: string;
+  analysis: ParsedSearchQuery;
   timestamp: string;
-  isConverted: boolean;
-}
-
-export interface Catalogue {
-  id: string;
-  user_id: string;
-  title: string;
-  name: string;
-  description?: string;
-  is_published: boolean;
-  isPublic: boolean;
-  access_config: CatalogueAccessConfig;
-  items: CatalogueItem[];
-  artworks: Artwork[];
-  created_at: string;
-  updated_at: string;
-  slug?: string;
-  cover_image_url?: string;
-  profiles?: any;
-  branding?: any;
-  artist_id?: string; // Added for compatibility
-}
-
-export interface Location {
-  id: string;
-  name: string;
-  type: 'studio' | 'storage' | 'gallery';
-}
-
-// Added missing type definitions based on component errors
-
-export interface SmartReminder {
-  id: string;
-  event_id?: string;
-  title: string;
-  message: string;
-  type: 'fair_reminder' | 'consignment_expiry' | 'exhibition_lead_up' | 'contact_follow_up';
-  due_date: string;
-  is_read: boolean;
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  action_required: boolean;
-  contact_info?: {
-    name: string;
-    email: string;
+  notificationsEnabled: boolean;
+  lastMatchCount?: number;
+  filters?: {
+    rarity?: string;
+    maxPrice?: number;
+    category?: string;
   };
 }
 
@@ -167,15 +111,27 @@ export interface ParsedSearchQuery {
   subjects?: string[];
 }
 
-export interface SavedSearch {
+export interface Catalogue {
   id: string;
-  query: string;
-  analysis: ParsedSearchQuery;
-  timestamp: string;
+  user_id: string;
+  slug: string; // Mandatory for public URLs
+  title: string;
+  name: string;
+  description?: string;
+  is_published: boolean;
+  isPublic: boolean;
+  access_config: CatalogueAccessConfig;
+  items: CatalogueItem[];
+  artworks: Artwork[];
+  created_at: string;
+  updated_at: string;
+  cover_image_url?: string;
+  profiles?: UserProfile;
+  branding?: any;
 }
 
 export interface CatalogueAccessConfig {
-  mode: 'public' | 'private' | 'whitelist';
+  mode: 'public' | 'private' | 'whitelisted';
   password?: string;
   whitelistedTags: string[];
   whitelistedEmails: string[];
@@ -188,26 +144,78 @@ export interface CatalogueAccessConfig {
 export interface CatalogueItem {
   id: string;
   type: 'artwork' | 'text';
-  content: any; // Can be Artwork or { text: string }
+  content: any; 
   order: number;
   visiblePerspectiveIndexes?: number[];
   styles?: any;
 }
 
+export interface Contact {
+  id: string;
+  user_id: string;
+  full_name: string;
+  email: string;
+  purchase_intent_score: number;
+  acquisition_likelihood: number;
+  lead_status: 'critical' | 'active' | 'dormant' | 'unsubscribed';
+  source: 'organic' | 'imported' | 'campaign' | 'acquisition';
+  ownedAssets?: string[];
+  tags: string[];
+  location: string;
+  avatar_url: string;
+  interaction_count?: number;
+  inferred_budget?: string;
+  last_active?: string;
+  lifecycle_stage: 'subscriber' | 'lead' | 'opportunity' | 'collector';
+  growth_trajectory: 'surging' | 'stable' | 'declining';
+  interaction_timeline?: InteractionEvent[];
+}
+
+export interface InteractionEvent {
+  id: string;
+  type: 'view' | 'click' | 'save' | 'purchase' | 'inquiry' | 'campaign_open';
+  asset_id?: string;
+  asset_title?: string;
+  timestamp: string;
+  metadata?: any;
+}
+
+export interface Campaign {
+  id: string;
+  title: string;
+  type: 'newsletter' | 'drop' | 'invitation';
+  status: 'draft' | 'scheduled' | 'sent';
+  target_tags: string[];
+  sent_count: number;
+  open_rate: number;
+  click_rate: number;
+  created_at: string;
+}
+
+// Almanac and Messaging types
+export interface SmartReminder {
+  id: string;
+  event_id: string;
+  title: string;
+  message: string;
+  type: 'fair_reminder' | 'consignment_expiry' | 'exhibition_lead_up' | 'contact_follow_up';
+  due_date: string;
+  is_read: boolean;
+  priority: 'urgent' | 'high' | 'medium' | 'low';
+  action_required: boolean;
+  contact_info?: {
+    name: string;
+    email: string;
+  };
+}
+
 export interface CalendarEvent {
   id: string;
   title: string;
-  type: 'fair' | 'exhibition' | 'consignment' | 'other';
+  type: 'fair' | 'consignment' | 'exhibition';
   start_date: string;
-  end_date?: string;
-  status: 'upcoming' | 'ongoing' | 'completed';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-}
-
-export interface SocialLinks {
-  instagram?: string;
-  twitter?: string;
-  linkedin?: string;
+  status: string;
+  priority: string;
 }
 
 export interface Notification {
@@ -222,41 +230,11 @@ export interface Notification {
 
 export interface Conversation {
   id: string;
-  artwork: Partial<Artwork>;
+  artwork: { id: string; title: string; imageUrl: string; price: number };
   participant: { id: string; name: string; avatarUrl: string };
   lastMessage: string;
   timestamp: string;
   unreadCount: number;
-}
-
-export interface Message {
-  id: string;
-  conversationId: string;
-  senderId: string;
-  text: string;
-  timestamp: string;
-}
-
-export interface ScoredArtwork extends Artwork {
-  relevanceScore: number;
-  matchReasons: string[];
-}
-
-export interface Contact {
-  id: string;
-  user_id: string;
-  full_name: string;
-  email: string;
-  purchase_intent_score: number;
-  acquisition_likelihood: number;
-  lead_status: 'critical' | 'active' | 'dormant';
-  source: 'owner' | 'buyer' | 'imported';
-  ownedAssets?: string[];
-  tags: string[];
-  location: string;
-  avatar_url: string;
-  interaction_count?: number;
-  inferred_budget?: string;
 }
 
 export interface Exhibition {
@@ -268,6 +246,12 @@ export interface Exhibition {
   end_date: string;
   type: 'solo' | 'group';
   description: string;
+}
+
+export interface Location {
+  id: string;
+  name: string;
+  type: 'studio' | 'storage' | 'gallery';
 }
 
 export interface MarketTrend {
@@ -290,4 +274,55 @@ export interface AestheticAlignment {
   avatar: string;
   context: string;
   overlapScore: number;
+}
+
+export interface EngagementSignal {
+  id: string;
+  collectorName: string;
+  collectorId: string;
+  artworkId: string;
+  artworkTitle: string;
+  intensity: number;
+  timestamp: string;
+  isConverted: boolean;
+}
+
+// Fix: Added missing exported types to resolve multiple file errors
+
+/**
+ * Strategic Collection Roadmap interface used by curatorial services and components.
+ */
+export interface Roadmap {
+  id: string;
+  collector_id: string;
+  title: string;
+  description: string;
+  budget_min: number;
+  budget_max: number;
+  target_mediums: string[];
+  target_styles: string[];
+  timeline_months: number;
+  rarity_bias: 'emerging' | 'blue_chip' | 'diversified';
+  progress_percentage: number;
+  is_active: boolean;
+  updated_at: string;
+  target_price_range?: { min: number; max: number };
+}
+
+/**
+ * Message interface for communication and negotiations between nodes.
+ */
+export interface Message {
+  id: string;
+  sender_id: string;
+  text: string;
+  timestamp: string;
+}
+
+/**
+ * Artwork metadata extended with scoring for search result prioritization.
+ */
+export interface ScoredArtwork extends Artwork {
+  relevanceScore: number;
+  matchReasons: string[];
 }

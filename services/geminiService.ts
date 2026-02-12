@@ -1,54 +1,87 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
-import { Artwork, Roadmap, ParsedSearchQuery } from "../types";
+import { Artwork, Roadmap, ParsedSearchQuery, Contact, InteractionEvent } from "../types";
 
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Added missing GalleryPersona type definition used for press pack tailoring
+export type GalleryPersona = 'blue_chip' | 'emerging' | 'boutique' | 'corporate';
 
-// Added missing exported types for components
 export interface SearchSuggestion {
   term: string;
   category: 'artist' | 'style' | 'medium' | 'artwork';
 }
 
-export interface AestheticTrend {
-  term: string;
-  intensity: number;
+export interface CollectorNeuralIntel {
+  archetype: string;
+  sentimentSummary: string;
+  materialityBias: string[];
+  predictedNextAssetId: string;
+  predictedReasoning: string;
+  confidence: number;
 }
-
-export type GalleryPersona = 'blue_chip' | 'emerging' | 'boutique' | 'corporate';
 
 export const geminiService = {
   /**
-   * Translates a collector's natural language mission into a structured roadmap.
+   * Deep Analysis of a collector's interaction loops to provide strategic artist guidance.
+   */
+  async synthesizeCollectorDna(contact: Contact, interactionHistory: InteractionEvent[], availableArtworks: Artwork[]): Promise<CollectorNeuralIntel | null> {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Analyze this collector's interaction history for an artist.
+                   Collector: ${contact.full_name}
+                   History: ${JSON.stringify(interactionHistory)}
+                   Available Registry: ${JSON.stringify(availableArtworks.map(a => ({ id: a.id, title: a.title, style: a.style, medium: a.primary_medium })))}
+                   
+                   STRICT JSON OUTPUT:
+                   {
+                     "archetype": "string (e.g. The Structuralist, The Color-Field Hunter)",
+                     "sentimentSummary": "string (1-2 sentences on current emotional intent)",
+                     "materialityBias": ["string"],
+                     "predictedNextAssetId": "string (ID from registry)",
+                     "predictedReasoning": "string (Why this specific work fits their current trajectory)",
+                     "confidence": number (0-1)
+                   }`,
+        config: { responseMimeType: "application/json" }
+      });
+      return JSON.parse(response.text || '{}');
+    } catch (e) {
+      console.error("Collector DNA synthesis failed", e);
+      return null;
+    }
+  },
+
+  /**
+   * Translates a collector's natural language mission into a strategic collection roadmap.
    */
   async analyzeRoadmapDraft(prompt: string): Promise<Partial<Roadmap> | null> {
-    const ai = getAI();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Act as a high-end AI Art Advisor. Translate this collector mission into a strategic collection roadmap: "${prompt}".
                    STRICT JSON OUTPUT:
                    {
-                     "title": "string (sophisticated)",
-                     "description": "string (curatorial thesis)",
+                     "title": "string (sophisticated title)",
+                     "description": "string (curatorial thesis/mission statement)",
                      "budget_min": number,
                      "budget_max": number,
                      "target_mediums": ["string"],
                      "target_styles": ["string"],
                      "timeline_months": number,
-                     "rarity_bias": "emerging" | "blue_chip" | "diversified"
+                     "rarity_bias": "emerging" | "blue_chip" | "diversified",
+                     "target_price_range": { "min": number, "max": number }
                    }`,
         config: { responseMimeType: "application/json" }
       });
       return JSON.parse(response.text || '{}');
-    } catch { return null; }
+    } catch (e) {
+      console.error("Roadmap analysis failed", e);
+      return null;
+    }
   },
 
-  /**
-   * Analyzes an artwork during upload to assist the artist with metadata.
-   */
   async analyzeArtworkForUpload(base64Image: string): Promise<any | null> {
-    const ai = getAI();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
       const data = base64Image.split(',')[1] || base64Image;
       const response = await ai.models.generateContent({
@@ -56,7 +89,7 @@ export const geminiService = {
         contents: [{ 
           parts: [
             { inlineData: { mimeType: 'image/jpeg', data } }, 
-            { text: "Analyze this artwork for a studio registry. Identify the medium, style, suggested valuation range based on current emerging trends, and provide 3 curatorial 'narrative seeds' the artist can use to write their statement. Return JSON." }
+            { text: "Analyze this artwork for a studio registry. Identify the medium, style, suggested valuation range, and provide 3 curatorial 'narrative seeds'. Return JSON." }
           ] 
         }],
         config: { responseMimeType: "application/json" }
@@ -66,24 +99,22 @@ export const geminiService = {
   },
 
   async generateRecommendationNarrative(artwork: Artwork, context: any): Promise<string> {
-    const ai = getAI();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `In one poetic, professional sentence, explain the resonance between ${artwork.title} by ${artwork.artist} and a collector seeking ${context.mission || 'contemporary discovery'}. Focus on tactile presence and long-term relevance.`,
+        contents: `In one poetic, professional sentence, explain the resonance between "${artwork.title}" by ${artwork.artist} and a collector seeking ${context.mission || 'contemporary discovery'}.`,
       });
       return response.text?.trim() || "A strategic addition aligned with your collection trajectory.";
     } catch { return "Selected for formal and atmospheric alignment."; }
   },
 
-  // Added missing methods required by components
-
   async getLiveSuggestions(query: string): Promise<SearchSuggestion[]> {
-    const ai = getAI();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Provide 5 art market search suggestions for the query: "${query}". Return JSON array of objects with { "term": string, "category": "artist" | "style" | "medium" | "artwork" }`,
+        contents: `Provide 5 art market search suggestions for the query: "${query}". Return JSON.`,
         config: { responseMimeType: "application/json" }
       });
       return JSON.parse(response.text || '[]');
@@ -91,11 +122,11 @@ export const geminiService = {
   },
 
   async parseSearchQuery(query: string): Promise<ParsedSearchQuery | null> {
-    const ai = getAI();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Parse this art search query: "${query}". Extract styles, mediums, price range, colors, and subjects. Return JSON: { "styles": [], "mediums": [], "priceRange": { "min": number, "max": number }, "colors": [], "subjects": [] }`,
+        contents: `Parse this art search query: "${query}". Return JSON.`,
         config: { responseMimeType: "application/json" }
       });
       return JSON.parse(response.text || '{}');
@@ -103,7 +134,7 @@ export const geminiService = {
   },
 
   async visualSearch(base64Image: string): Promise<ParsedSearchQuery | null> {
-    const ai = getAI();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
       const data = base64Image.split(',')[1] || base64Image;
       const response = await ai.models.generateContent({
@@ -111,7 +142,7 @@ export const geminiService = {
         contents: [{
           parts: [
             { inlineData: { mimeType: 'image/jpeg', data } },
-            { text: "Analyze the aesthetic DNA of this image to find similar artworks. Return JSON with styles, mediums, and colors." }
+            { text: "Analyze the aesthetic DNA of this image to find similar artworks. Return JSON." }
           ]
         }],
         config: { responseMimeType: "application/json" }
@@ -121,24 +152,22 @@ export const geminiService = {
   },
 
   async generateContinuityInsight(artwork: Artwork, context: any): Promise<string> {
-    const ai = getAI();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Explain how ${artwork.title} fits into a collection focused on ${context.recentSearches?.join(', ') || 'contemporary art'}. Focus on visual continuity.`,
+        contents: `Explain how ${artwork.title} fits into a collection focused on ${context.recentSearches?.join(', ') || 'contemporary art'}.`,
       });
       return response.text?.trim() || "Matches your established aesthetic trajectory.";
     } catch { return "Aligns with your collection focus."; }
   },
 
   async analyzeMateriality(imageUrl: string): Promise<{tactilePresence: string; lightingBehavior: string} | null> {
-    const ai = getAI();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
-      // In a real app, you would fetch the image and convert to base64 or pass the URL if the model supports it.
-      // Assuming vision analysis on the image for materiality.
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Analyze the materiality of this artwork image. Provide two brief observations: tactilePresence and lightingBehavior. Return JSON.`,
+        contents: `Analyze the materiality of this artwork image. Provide two brief observations. Return JSON.`,
         config: { responseMimeType: "application/json" }
       });
       return JSON.parse(response.text || '{}');
@@ -146,11 +175,11 @@ export const geminiService = {
   },
 
   async suggestCatalogueComposition(artworks: Artwork[], prompt: string): Promise<any> {
-    const ai = getAI();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Given these artworks: ${JSON.stringify(artworks.map(a => ({id: a.id, title: a.title, style: a.style})))}. Suggest a curated selection for: "${prompt}". Return JSON: { "suggestedIds": ["string"], "curatedTitle": "string", "sequenceReasoning": "string" }`,
+        contents: `Suggest a curated selection for: "${prompt}". Return JSON.`,
         config: { responseMimeType: "application/json" }
       });
       return JSON.parse(response.text || '{}');
@@ -158,11 +187,11 @@ export const geminiService = {
   },
 
   async generatePressPack(artworks: Artwork[], persona: GalleryPersona): Promise<any> {
-    const ai = getAI();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: `Generate a press pack for this series of artworks: ${JSON.stringify(artworks.map(a => a.title))}. Tailor for a ${persona} gallery. Return JSON: { "headline": "string", "statement": "string", "positioning": "string", "tags": ["string"], "narrative_dna": "string" }`,
+        contents: `Generate a press pack for these artworks. Tailor for a ${persona} gallery. Return JSON.`,
         config: { responseMimeType: "application/json" }
       });
       return JSON.parse(response.text || '{}');
@@ -170,11 +199,11 @@ export const geminiService = {
   },
 
   async synthesizeArchivalData(artwork: Artwork): Promise<any> {
-    const ai = getAI();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Synthesize archival provenance and historical context for an artwork: "${artwork.title}" by ${artwork.artist}. Return JSON: { "provenance": "string" }`,
+        contents: `Synthesize archival provenance for: "${artwork.title}" by ${artwork.artist}. Return JSON.`,
         config: { responseMimeType: "application/json" }
       });
       return JSON.parse(response.text || '{}');
@@ -182,34 +211,22 @@ export const geminiService = {
   },
 
   async fetchArtistIntelligence(context: string): Promise<any> {
-    const ai = getAI();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Analyze market momentum for an artist focused on: "${context}". Return JSON: { "trends": [], "signals": [], "alignments": [], "pulseWave": [] }`,
+        contents: `Analyze market momentum for: "${context}". Return JSON.`,
         config: { responseMimeType: "application/json" }
       });
       const data = JSON.parse(response.text || '{}');
-      // Ensure defaults if empty
       return {
-        trends: data.trends || [
-          { id: 't1', term: 'Industrial Abstraction', intensityScore: 84, description: 'Surge in demand for raw textures.', origin: 'Berlin Market' }
-        ],
-        signals: data.signals || [
-          { attribute: 'Textural Depth', collectorArchetype: 'The Visionary', observation: 'High dwell time on close-ups.', engagementLevel: 92 }
-        ],
-        alignments: data.alignments || [
-          { name: 'Marcus Thorne', avatar: 'https://picsum.photos/seed/marcus/100', context: 'Minimalist Sculpture', overlapScore: 0.78 }
-        ],
+        trends: data.trends || [],
+        signals: data.signals || [],
+        alignments: data.alignments || [],
         pulseWave: data.pulseWave || [10, 30, 25, 45, 60, 55, 80]
       };
     } catch { 
-      return { 
-        trends: [], 
-        signals: [], 
-        alignments: [], 
-        pulseWave: [10, 30, 25, 45, 60, 55, 80] 
-      }; 
+      return { trends: [], signals: [], alignments: [], pulseWave: [10, 30, 25, 45, 60, 55, 80] }; 
     }
   }
 };
