@@ -2,32 +2,33 @@
 import { supabase } from '../lib/supabase';
 import { contextualBandit } from './contextualBandit';
 import { Artwork, Roadmap } from '../types';
-import { MOCK_ARTWORKS } from '../constants';
 import { GoogleGenAI } from "@google/genai";
 
 class RecommendationEngine {
   async getPersonalizedRecommendations(userId: string, limit: number = 6) {
     try {
       const [profileRes, roadmapRes] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', userId).single(),
-        supabase.from('collection_roadmaps').select('*').eq('collector_id', userId).eq('is_active', true).single(),
+        supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+        supabase.from('collection_roadmaps').select('*').eq('collector_id', userId).eq('is_active', true).maybeSingle(),
       ]);
 
-      const profile = profileRes.data;
-      const roadmap = roadmapRes.data as Roadmap;
+      const profile = profileRes?.data;
+      const roadmap = roadmapRes?.data as Roadmap;
       
       const context = contextualBandit.getCurrentContext(userId, profile, roadmap);
 
-      // HYBRID POOL: Merge Live DB with 500 Test Nodes
-      let pool: Artwork[] = [...MOCK_ARTWORKS];
-      try {
-        const { data: dbArt } = await supabase.from('artworks').select('*').eq('status', 'available').limit(100);
-        if (dbArt && dbArt.length > 0) {
-          pool = [...(dbArt as Artwork[]), ...MOCK_ARTWORKS];
-        }
-      } catch (e) {
-        console.warn("Using offline ledger for recommendations.");
+      // PRODUCTION SOURCE: Exclusive live query
+      const { data: dbArt, error } = await supabase
+        .from('artworks')
+        .select('*')
+        .eq('status', 'available')
+        .limit(100);
+
+      if (error || !dbArt || dbArt.length === 0) {
+        return [];
       }
+
+      const pool = dbArt as Artwork[];
 
       // LinUCB Bandit Re-ranking
       const arms = pool.map(art => contextualBandit.artworkToArm(art));
@@ -62,7 +63,7 @@ class RecommendationEngine {
       : "Selected based on your core stylistic interaction signals.";
 
     const prompt = `Act as ArtFlow Strategist. 
-Evaluate artwork: "${artwork.title}" by ${artwork.artist} (${artwork.style}, ${artwork.primary_medium}).
+Evaluate artwork: "${artwork.title}" by ${artwork.artist_name || artwork.artist} (${artwork.style}, ${artwork.primary_medium}).
 Context: ${roadmapContext}
 Mode: ${reason === 'explore' ? 'Aesthetic Drift' : 'Strategic Fit'}.
 Write one brief curatorial sentence on why this is a high-intent match. Use terms like 'tactile resonance', 'chromatic weight', or 'formal rigor'.`;
