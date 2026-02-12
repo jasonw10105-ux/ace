@@ -41,12 +41,10 @@ import { ArtistPressPack } from './components/ArtistPressPack';
 import { StudioRegistry } from './components/StudioRegistry';
 import { AuthProvider } from './contexts/AuthProvider';
 import { logger } from './services/logger';
-import { Artwork, UserProfile, UserRole, QuizResult } from './types';
-import { FlowProvider, Box, Flex, Text, Button } from './flow';
+import { Artwork, UserProfile, UserRole } from './types';
+import { FlowProvider } from './flow';
 import { MOCK_ARTWORKS } from './constants';
-import toast from 'react-hot-toast';
 
-// Initialize the query client for the entire app state
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -69,63 +67,51 @@ const AppContent: React.FC<{
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [userArtworks, setUserArtworks] = useState<Artwork[]>([]);
 
-  const isImmersive = location.pathname.startsWith('/catalogue/') ||
-                       location.pathname.startsWith('/viewing-room/') ||
+  const isImmersive = location.pathname.includes('/catalogue/') ||
+                       location.pathname.includes('/viewing-room/') ||
                        location.pathname === '/onboarding';
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
-      const { data, error } = await (supabase.from('profiles').select('*').eq('id', userId).single() as any);
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
       if (error) throw error;
-      setUser(data as UserProfile);
-      const { data: arts } = await (supabase.from('artworks').select('*').eq('user_id', userId) as any);
-      setUserArtworks(arts || []);
+      
+      if (data && data.profile_complete) {
+        setUser(data as UserProfile);
+        const { data: arts } = await supabase.from('artworks').select('*').eq('user_id', userId);
+        setUserArtworks(arts || []);
+      } else {
+        // Authenticated but no complete profile - force Identity Setup
+        if (location.pathname !== '/auth') navigate('/auth');
+      }
     } catch (e) {
       logger.error('Profile sync failed', e as Error);
     }
-  }, [setUser]);
+  }, [setUser, navigate, location.pathname]);
 
   useEffect(() => {
+    // Initial check
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) fetchProfile(session.user.id);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) fetchProfile(session.user.id);
-      else {
+
+    // Listen for Auth signals (including Magic Link hash returns)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        fetchProfile(session.user.id);
+      } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setUserArtworks([]);
+        navigate('/');
       }
     });
+
     return () => subscription.unsubscribe();
-  }, [fetchProfile, setUser]);
+  }, [fetchProfile, navigate]);
 
   const handleAuthComplete = (role: UserRole, isNew: boolean) => {
     if ((role === 'COLLECTOR' || role === 'BOTH') && isNew) navigate('/onboarding');
     else navigate('/dashboard');
-  };
-
-  const handleOnboardingComplete = async (likedIds: string[], dislikedIds: string[], results: QuizResult) => {
-    if (!user) return;
-    
-    const loadingToast = toast.loading('Synchronizing Aesthetic DNA...');
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ 
-          preferences: results,
-          isOnboarded: true,
-          profile_complete: true 
-        })
-        .eq('id', user.id);
-
-      if (error) throw error;
-      
-      setUser({ ...user, isOnboarded: true, preferences: results });
-      toast.success('Neural Map Established.', { id: loadingToast });
-      navigate('/dashboard');
-    } catch (e) {
-      toast.error('Synthesis Interrupt. Check ledger connectivity.', { id: loadingToast });
-    }
   };
 
   const handleNavItemClick = (item: string) => {
@@ -161,21 +147,20 @@ const AppContent: React.FC<{
 
             <Routes>
               <Route path="/" element={user ? <HomePage /> : <WaitlistPage />} />
-              <Route path="/artworks" element={<ArtworksPage onCompareToggle={(a) => setComparisonQueue(prev => [...prev, a])} comparisonIds={comparisonQueue.map(a => a.id)} />} />
+              <Route path="/artworks" element={<ArtworksPage />} />
               <Route path="/artists" element={<ArtistsPage />} />
               <Route path="/artist/:id" element={<ArtistProfile />} />
               <Route path="/catalogues" element={<BrowseCataloguesPage />} />
               <Route path="/community" element={<CommunityPage user={user} />} />
               <Route path="/search" element={<SearchResultsPage />} />
               
-              {/* Restricted Discovery Routes */}
               <Route path="/explore" element={user ? <IntelligentExplorePage user={user} /> : <Navigate to="/auth" />} />
               <Route path="/waitlist" element={<WaitlistPage />} />
               <Route path="/auth" element={<AuthFlow onComplete={handleAuthComplete} onBackToHome={() => navigate('/')} />} />
               <Route path="/recovery" element={<RecoveryFlow onBack={() => navigate('/auth')} onComplete={() => navigate('/dashboard')} />} />
               
               <Route path="/dashboard" element={user ? <Dashboard user={user} onAction={() => navigate('/artworks')} /> : <Navigate to="/auth" />} />
-              <Route path="/roadmap" element={user ? <CollectionRoadmapPage onBack={() => navigate('/dashboard')} onFinalizeCalibration={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+              <Route path="/roadmap" element={user ? <CollectionRoadmapPage onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
               <Route path="/favorites" element={user ? <FavoritesPage onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
               <Route path="/calendar" element={user ? <Calendar onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
               <Route path="/registry" element={user ? <StudioRegistry onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
@@ -188,9 +173,12 @@ const AppContent: React.FC<{
               <Route path="/workspace" element={user ? <ProjectWorkspace onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
               <Route path="/audit" element={user ? <CollectionAudit onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
               <Route path="/press-pack" element={user ? <ArtistPressPack artworks={userArtworks} onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-              <Route path="/artwork/:id" element={<ArtworkDetail />} />
               <Route path="/advisor" element={user ? <LiveArtAdvisor onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
               
+              {/* Identity Centric Public Routes */}
+              <Route path="/:username/artwork/:slug" element={<ArtworkDetail />} />
+              <Route path="/:username/catalogue/:slug" element={<CatalogueDetail />} />
+
               <Route path="/upload-new" element={user?.role !== 'COLLECTOR' ? <ArtworkCreate onSave={() => navigate('/dashboard')} onCancel={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
               <Route path="/create-catalogue" element={user?.role !== 'COLLECTOR' ? <CatalogueCreate onSave={() => navigate('/dashboard')} onCancel={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
             </Routes>
@@ -200,8 +188,9 @@ const AppContent: React.FC<{
 
         {isImmersive && (
            <Routes>
-              <Route path="/onboarding" element={user ? <TasteOnboarding artworks={MOCK_ARTWORKS.slice(0, 10)} onComplete={handleOnboardingComplete} /> : <Navigate to="/auth" />} />
+              <Route path="/onboarding" element={user ? <TasteOnboarding artworks={MOCK_ARTWORKS.slice(0, 10)} onComplete={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
               <Route path="/catalogue/:id" element={<CatalogueDetail />} />
+              <Route path="/:username/catalogue/:slug" element={<CatalogueDetail />} />
               <Route path="/viewing-room/:id" element={<CatalogueDetail />} />
            </Routes>
         )}

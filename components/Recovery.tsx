@@ -9,17 +9,16 @@ import {
   ShieldCheck, 
   Cpu, 
   Fingerprint, 
-  ShieldAlert,
-  CheckCircle2,
   AlertTriangle,
   RefreshCw,
   Zap,
-  Shield
+  Shield,
+  Loader2,
+  CheckCircle2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { validateEmail, validatePassword } from '../utils/validation';
-import { authRateLimiter } from '../utils/rateLimit';
-import { Box, Flex, Text, Button, Input, Separator } from '../flow';
+import { Box, Flex, Text, Button, Separator } from '../flow';
 
 interface RecoveryFlowProps {
   onBack: () => void;
@@ -55,47 +54,49 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
       return;
     }
 
-    if (!authRateLimiter.isAllowed(email)) {
-      toast.error('Signal frequency exceeded. Please wait 15 minutes.');
-      return;
-    }
-
     setIsLoading(true);
-    // In Supabase, this sends an OTP or a link depending on your dashboard settings
-    // For a real "OTP" experience, ensure the template is set to OTP
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
-    
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success('Recovery code dispatched to registry.');
+    const loadingToast = toast.loading('Synchronizing Identity Ledger...');
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/recovery'
+      });
+      
+      if (error) throw error;
+
+      toast.success('Recovery code dispatched to registry.', { id: loadingToast });
       setStep('verify');
       setResendCooldown(60);
+    } catch (error: any) {
+      toast.error(error.message || 'Recovery Request Failed', { id: loadingToast });
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp.length < 6) {
-      toast.error('Identity key must be 6 digits.');
-      return;
-    }
+    if (otp.length < 6) return;
     
     setIsLoading(true);
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token: otp,
-      type: 'recovery',
-    });
+    const loadingToast = toast.loading('Decrypting Access Signal...');
 
-    if (error) {
-      toast.error('Neural key rejected. Please verify the code.');
-    } else {
-      toast.success('Identity Synchronized.');
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email,
+        token: otp,
+        type: 'recovery',
+      });
+
+      if (error) throw error;
+
+      toast.success('Identity Synchronized.', { id: loadingToast });
       setStep('reset');
+    } catch (error: any) {
+      toast.error(error.message || 'Invalid Access Key', { id: loadingToast });
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const onPasswordChange = (val: string) => {
@@ -119,31 +120,30 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
     }
 
     setIsLoading(true);
-    // Once verified via OTP, Supabase allows the password update for the current session
-    const { error } = await supabase.auth.updateUser({ password });
+    const loadingToast = toast.loading('Resynthesizing Neural Identity...');
 
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success('Neural Identity Resynthesized.');
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+
+      toast.success('Access keys locked.', { id: loadingToast });
       setStep('success');
+    } catch (error: any) {
+      toast.error(error.message || 'Resynthesis Interrupt', { id: loadingToast });
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (
     <div className="fixed inset-0 z-[210] bg-white flex flex-col items-center justify-center p-6 overflow-y-auto animate-in fade-in duration-700">
       <div className="absolute top-10 left-10">
-        <button 
-          onClick={onBack} 
-          className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-gray-400 hover:text-black transition-all group"
-        >
-          <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> Back to Entrance
+        <button onClick={onBack} className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-gray-400 hover:text-black transition-all group">
+          <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> Back
         </button>
       </div>
 
       <div className="max-w-md w-full space-y-12">
-        {/* Step Visualizer */}
         <Flex justify="center" gap={3} mb={8}>
            {['request', 'verify', 'reset', 'success'].map((s, idx) => (
              <div 
@@ -161,29 +161,22 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
               <div className="w-24 h-24 bg-gray-50 rounded-[2.5rem] flex items-center justify-center text-gray-300 mx-auto mb-8 shadow-inner border border-gray-100">
                 <Mail size={40} />
               </div>
-              <h1 className="text-5xl font-serif font-bold italic tracking-tighter mb-4 leading-none">Access Request.</h1>
-              <p className="text-gray-400 font-light text-lg">Enter your identifier to trigger a recovery signal.</p>
+              <h1 className="text-5xl font-serif font-bold italic tracking-tighter mb-4 leading-none">Recover Access.</h1>
+              <p className="text-gray-400 font-light text-lg">Enter your identifier to trigger recovery.</p>
             </div>
 
             <form onSubmit={handleRequestOTP} className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 ml-4">Registry Email</label>
                 <input 
-                  type="email" 
-                  required
-                  value={email}
+                  type="email" required value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@example.com"
                   className="w-full bg-gray-50 border-2 border-transparent rounded-[1.5rem] px-8 py-5 focus:bg-white focus:border-black outline-none transition-all shadow-inner text-lg"
                 />
               </div>
-              <button 
-                disabled={isLoading || !email}
-                type="submit" 
-                className="w-full bg-black text-white py-6 rounded-[1.5rem] font-bold uppercase tracking-[0.2em] hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-4 disabled:opacity-30"
-              >
-                {isLoading ? <Cpu className="animate-spin" size={20} /> : 'Request Reset Signal'}
-                {!isLoading && <Zap size={18} className="text-blue-400" />}
+              <button disabled={isLoading || !email} type="submit" className="w-full bg-black text-white py-6 rounded-[1.5rem] font-bold uppercase tracking-[0.2em] hover:scale-[1.02] transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-4 disabled:opacity-30">
+                {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Request Signal'}
               </button>
             </form>
           </div>
@@ -196,43 +189,32 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
                 <Fingerprint size={40} />
               </div>
               <h1 className="text-5xl font-serif font-bold italic tracking-tighter mb-4">Verification.</h1>
-              <p className="text-gray-400 font-light text-lg">A 6-digit identity key was dispatched to <span className="text-black font-medium">{email}</span>.</p>
+              <p className="text-gray-400 font-light text-lg">A 6-digit key was dispatched to <span className="text-black font-medium">{email}</span>.</p>
             </div>
 
             <form onSubmit={handleVerifyOTP} className="space-y-10">
               <input 
-                type="text" 
-                maxLength={6}
-                required
-                autoFocus
+                type="text" maxLength={6} required autoFocus
                 value={otp}
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                className="w-full bg-gray-50 border-2 border-transparent rounded-[2rem] py-8 text-center text-5xl font-mono font-bold tracking-[0.4em] focus:bg-white focus:border-black outline-none transition-all shadow-inner text-black placeholder:text-gray-100"
+                className="w-full bg-gray-50 border-2 border-transparent rounded-[2rem] py-8 text-center text-5xl font-mono font-bold tracking-[0.4em] focus:bg-white focus:border-black outline-none transition-all shadow-inner"
                 placeholder="000000"
               />
-              <div className="space-y-4">
-                <button 
-                  disabled={isLoading || otp.length < 6}
-                  type="submit" 
-                  className="w-full bg-black text-white py-6 rounded-[1.5rem] font-bold uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-4 disabled:opacity-30"
-                >
-                  {isLoading ? <Cpu className="animate-spin" size={20} /> : 'Verify Key'}
-                  {!isLoading && <ShieldCheck size={20} />}
-                </button>
-                
-                <div className="text-center">
-                  <button 
-                    type="button"
-                    onClick={() => handleRequestOTP()}
-                    disabled={resendCooldown > 0 || isLoading}
-                    className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-black transition-colors disabled:opacity-50 flex items-center gap-2 mx-auto"
-                  >
-                    <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-                    {resendCooldown > 0 ? `Resend Signal in ${resendCooldown}s` : 'Resend Neural Key'}
-                  </button>
-                </div>
-              </div>
+              <button disabled={isLoading || otp.length < 6} type="submit" className="w-full bg-black text-white py-6 rounded-[1.5rem] font-bold uppercase tracking-widest hover:scale-[1.02] transition-all shadow-xl disabled:opacity-30 flex items-center justify-center gap-3">
+                {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Verify Access'}
+              </button>
             </form>
+
+            <div className="text-center">
+              <button 
+                type="button" onClick={() => handleRequestOTP()}
+                disabled={resendCooldown > 0 || isLoading}
+                className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-black transition-colors disabled:opacity-50 flex items-center gap-2 mx-auto"
+              >
+                <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+                {resendCooldown > 0 ? `Resend Signal in ${resendCooldown}s` : 'Resend Key'}
+              </button>
+            </div>
           </div>
         )}
 
@@ -242,8 +224,8 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
               <div className="w-24 h-24 bg-purple-50 rounded-[2.5rem] flex items-center justify-center text-purple-500 mx-auto mb-8 shadow-inner border border-purple-100">
                 <Lock size={40} />
               </div>
-              <h1 className="text-5xl font-serif font-bold italic tracking-tighter mb-4 leading-none">Resynthesis.</h1>
-              <p className="text-gray-400 font-light text-lg">Establish a new high-fidelity access key for your identity.</p>
+              <h1 className="text-5xl font-serif font-bold italic tracking-tighter mb-4 leading-none">New Logic.</h1>
+              <p className="text-gray-400 font-light text-lg">Establish a new high-fidelity access key.</p>
             </div>
 
             <form onSubmit={handleResetPassword} className="space-y-8">
@@ -251,9 +233,7 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-4">New Credential</label>
                   <input 
-                    type="password" 
-                    required
-                    autoFocus
+                    type="password" required autoFocus
                     value={password}
                     onChange={(e) => onPasswordChange(e.target.value)}
                     placeholder="Min. 8 characters"
@@ -262,24 +242,16 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
                   {password && (
                     <div className="px-4 pt-1">
                       <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full transition-all duration-700 ${passwordMetrics.score > 70 ? 'bg-green-500' : passwordMetrics.score > 40 ? 'bg-blue-500' : 'bg-red-500'}`}
-                          style={{ width: `${passwordMetrics.score}%` }}
-                        />
+                        <div className={`h-full transition-all duration-700 ${passwordMetrics.score > 70 ? 'bg-green-500' : passwordMetrics.score > 40 ? 'bg-blue-500' : 'bg-red-500'}`} style={{ width: `${passwordMetrics.score}%` }} />
                       </div>
-                      <p className="text-[9px] font-bold uppercase tracking-widest mt-2 text-gray-400 flex items-center justify-between">
-                         Neural Complexity
-                         <span className="font-mono">{passwordMetrics.score}%</span>
-                      </p>
                     </div>
                   )}
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-4">Confirm Signal</label>
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-4">Confirm Key</label>
                   <input 
-                    type="password" 
-                    required
+                    type="password" required
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Repeat password"
@@ -288,21 +260,8 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
                 </div>
               </div>
 
-              {passwordMetrics.errors.length > 0 && password && (
-                <div className="bg-red-50 p-6 rounded-[1.5rem] border border-red-100 flex gap-4">
-                   <AlertTriangle size={20} className="text-red-500 shrink-0" />
-                   <p className="text-[11px] text-red-600 leading-normal uppercase font-bold tracking-wider">
-                     Requirement Miss: <span className="font-light normal-case opacity-70">{passwordMetrics.errors[0]}</span>
-                   </p>
-                </div>
-              )}
-
-              <button 
-                disabled={isLoading || password !== confirmPassword || passwordMetrics.score < 40}
-                type="submit" 
-                className="w-full bg-black text-white py-6 rounded-[1.5rem] font-bold uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-4 disabled:opacity-30"
-              >
-                {isLoading ? <Cpu className="animate-spin" size={20} /> : 'Lock Resynthesis'}
+              <button disabled={isLoading || password !== confirmPassword || passwordMetrics.score < 40} type="submit" className="w-full bg-black text-white py-6 rounded-[1.5rem] font-bold uppercase tracking-widest hover:scale-[1.02] transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-4 disabled:opacity-30">
+                {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Lock Resynthesis'}
               </button>
             </form>
           </div>
@@ -310,20 +269,14 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
 
         {step === 'success' && (
           <div className="text-center space-y-12 animate-in zoom-in duration-700">
-            <div className="relative mx-auto w-32 h-32">
-               <div className="absolute inset-0 bg-green-500/20 blur-3xl rounded-full animate-pulse"></div>
-               <div className="relative w-32 h-32 bg-black rounded-[2.5rem] flex items-center justify-center text-green-400 shadow-2xl border border-white/10">
-                  <CheckCircle2 size={56} />
-               </div>
+            <div className="relative mx-auto w-32 h-32 bg-black rounded-[2.5rem] flex items-center justify-center text-green-400 shadow-2xl border border-white/10">
+               <CheckCircle2 size={56} />
             </div>
             <div>
               <h1 className="text-6xl font-serif font-bold italic tracking-tighter mb-4 leading-none">Aligned.</h1>
-              <p className="text-gray-400 font-light max-w-xs mx-auto leading-relaxed text-lg">Your identity access has been successfully resynthesized.</p>
+              <p className="text-gray-400 font-light max-w-xs mx-auto leading-relaxed text-lg">Your identity access has been resynthesized successfully.</p>
             </div>
-            <button 
-              onClick={onComplete}
-              className="w-full bg-black text-white py-6 rounded-[1.5rem] font-bold uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-3"
-            >
+            <button onClick={onComplete} className="w-full bg-black text-white py-6 rounded-[1.5rem] font-bold uppercase tracking-widest hover:scale-[1.02] transition-all shadow-xl flex items-center justify-center gap-3">
               Enter Dashboard <ArrowRight size={18} />
             </button>
           </div>
@@ -331,11 +284,9 @@ export const RecoveryFlow: React.FC<RecoveryFlowProps> = ({ onBack, onComplete }
 
         {step !== 'success' && (
           <div className="flex items-start gap-4 p-6 bg-gray-50 rounded-[2rem] border border-gray-100 mt-12">
-            <div className="p-2.5 bg-white rounded-xl shadow-sm text-blue-500 shrink-0">
-               <Shield size={18} />
-            </div>
+            <Shield size={18} className="text-blue-500 shrink-0" />
             <p className="text-[10px] text-gray-500 leading-normal uppercase font-bold tracking-widest">
-              Security Protocol: <span className="font-light text-gray-400 lowercase italic">Signal keys are valid for 15 minutes. All data is end-to-end encrypted within the vault.</span>
+              Security Protocol: <span className="font-light text-gray-400 lowercase italic">Keys valid for 15 minutes. All data is end-to-end encrypted within the vault.</span>
             </p>
           </div>
         )}

@@ -1,15 +1,17 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { geminiService, SearchSuggestion, AestheticTrend } from '../services/geminiService';
+import { geminiService, SearchSuggestion } from '../services/geminiService';
 import { ParsedSearchQuery, SavedSearch } from '../types';
 import { 
   Search, Camera, Mic, Sparkles, ArrowRight, Zap, 
-  X, MicOff, Loader2, Target,
-  Activity as PulseIcon, Users, Layers, Image as ImageIcon
+  X, MicOff, Loader2, Target, Bell, BellOff,
+  Activity as PulseIcon, Users, Layers, Image as ImageIcon,
+  Clock, Trash2, ChevronRight
 } from 'lucide-react';
 import { Flex, Box, Text } from '../flow';
 import toast from 'react-hot-toast';
+import { supabase } from '../lib/supabase';
 
 interface SearchOverlayProps {
   onClose: () => void;
@@ -33,6 +35,8 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({ onClose, onSearch,
   const navigate = useNavigate();
   const recognitionRef = useRef<any>(null);
   const debounceTimer = useRef<any>(null);
+
+  const user = JSON.parse(localStorage.getItem('artflow_user') || 'null');
 
   const trendingSearches = [
     "Minimalist Oils", "Berlin Brutalism", "Abstract Blue under $5k", 
@@ -95,6 +99,37 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({ onClose, onSearch,
     }
   };
 
+  const handleDeleteSaved = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const updated = savedSearches.filter(s => s.id !== id);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ savedSearches: updated })
+      .eq('id', user.id);
+    
+    if (!error) {
+      localStorage.setItem('artflow_user', JSON.stringify({ ...user, savedSearches: updated }));
+      toast.success('Signal purged from ledger.');
+      window.dispatchEvent(new Event('storage'));
+    }
+  };
+
+  const toggleNotifications = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const updated = savedSearches.map(s => s.id === id ? { ...s, notificationsEnabled: !s.notificationsEnabled } : s);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ savedSearches: updated })
+      .eq('id', user.id);
+    
+    if (!error) {
+      localStorage.setItem('artflow_user', JSON.stringify({ ...user, savedSearches: updated }));
+      const target = updated.find(s => s.id === id);
+      toast.success(target?.notificationsEnabled ? 'Neural alerts active.' : 'Alerts disconnected.');
+      window.dispatchEvent(new Event('storage'));
+    }
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith('image/')) {
@@ -145,7 +180,7 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({ onClose, onSearch,
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-20">
-          <div className="lg:col-span-8 space-y-12">
+          <div className="lg:col-span-8 space-y-16">
             <form onSubmit={handleSubmit} className="relative group">
               <input
                 ref={inputRef}
@@ -171,17 +206,71 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({ onClose, onSearch,
                <Flex align="center" gap={2}><Layers size={14}/> Catalogues</Flex>
             </div>
 
+            {/* Captured Signals Ledger */}
+            {savedSearches.length > 0 && (
+              <div className="animate-in slide-in-from-bottom-4 duration-500">
+                <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-gray-400 mb-8 flex items-center gap-3">
+                  <PulseIcon size={14} className="text-blue-500" /> Your Captured Signals
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {savedSearches.map((s) => (
+                    <div 
+                      key={s.id} 
+                      onClick={() => onSelectSaved(s)}
+                      className="group bg-gray-50 hover:bg-white border border-gray-100 hover:border-black p-8 rounded-[2rem] transition-all cursor-pointer relative overflow-hidden"
+                    >
+                       <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 blur-[40px] rounded-full group-hover:bg-blue-500/10 transition-colors"></div>
+                       <Flex justify="between" align="start" mb={4}>
+                          <p className="text-2xl font-serif font-bold italic line-clamp-1">"{s.query}"</p>
+                          <div className="flex gap-2 relative z-10">
+                             <button 
+                              onClick={(e) => toggleNotifications(e, s.id)}
+                              className={`p-2 rounded-lg transition-all ${s.notificationsEnabled ? 'text-blue-600 bg-blue-50' : 'text-gray-300 hover:text-black'}`}
+                             >
+                                {s.notificationsEnabled ? <Bell size={16} className="animate-pulse" /> : <BellOff size={16} />}
+                             </button>
+                             <button 
+                              onClick={(e) => handleDeleteSaved(e, s.id)}
+                              className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                             >
+                                <Trash2 size={16} />
+                             </button>
+                          </div>
+                       </Flex>
+                       <Flex justify="between" align="end">
+                          <Box>
+                             <div className="flex flex-wrap gap-1 mb-3">
+                                {s.analysis.styles.slice(0, 2).map(style => (
+                                  <span key={style} className="text-[8px] font-black uppercase text-gray-400">#{style}</span>
+                                ))}
+                             </div>
+                             <p className="text-[10px] font-mono text-gray-300 flex items-center gap-1.5 uppercase">
+                               <Clock size={10} /> {new Date(s.timestamp).toLocaleDateString()}
+                             </p>
+                          </Box>
+                          <div className="text-right">
+                             <p className="text-xl font-bold text-black">{s.lastMatchCount || 0}</p>
+                             <p className="text-[8px] font-black text-gray-300 uppercase">Matches</p>
+                          </div>
+                       </Flex>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Trending Searches */}
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-400 mb-6">Trending Searches</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-gray-400 mb-8">Trending Searches</p>
               <div className="flex flex-wrap gap-3">
                 {trendingSearches.map((term, i) => (
                   <button 
                     key={i} 
                     onClick={() => { setQuery(term); handleSubmit(); }}
-                    className="group bg-gray-50 hover:bg-black px-6 py-3 rounded-full transition-all flex items-center gap-3 border border-gray-100"
+                    className="group bg-white hover:bg-black px-6 py-4 rounded-full transition-all flex items-center gap-3 border border-gray-100 hover:border-black"
                   >
                     <span className="text-sm font-bold group-hover:text-white transition-colors">{term}</span>
+                    <ChevronRight size={14} className="text-gray-300 group-hover:text-white group-hover:translate-x-1 transition-all" />
                   </button>
                 ))}
               </div>
@@ -213,6 +302,16 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({ onClose, onSearch,
                   )}
                   <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*" />
                 </div>
+
+                <div className="p-10 bg-blue-50 border border-blue-100 rounded-[3rem] space-y-4">
+                   <Flex align="center" gap={3}>
+                      <ShieldCheck className="text-blue-600" size={20} />
+                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-800">Neural Sync</p>
+                   </Flex>
+                   <p className="text-xs text-blue-700/60 leading-relaxed font-serif italic">
+                     "Signals captured in your ledger are end-to-end encrypted and used only to calibrate your personalized frontier feed."
+                   </p>
+                </div>
              </div>
           </div>
         </div>
@@ -220,5 +319,9 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({ onClose, onSearch,
     </div>
   );
 };
+
+const ShieldCheck = ({ size, className }: { size?: number, className?: string }) => (
+  <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+);
 
 export default SearchOverlay;

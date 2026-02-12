@@ -17,22 +17,22 @@ export const IntelligenceRecommendationRail: React.FC<IntelligenceRecommendation
   onSelect 
 }) => {
   return (
-    <section className="py-12 animate-in fade-in duration-1000">
+    <section className="py-4 animate-in fade-in duration-1000">
       <div className="flex justify-between items-end mb-10 border-b border-gray-100 pb-8">
         <div>
-          <div className="flex items-center gap-3 text-blue-500 font-bold text-[10px] uppercase tracking-[0.4em] mb-4">
+          <div className="flex items-center gap-3 text-blue-600 font-bold text-[10px] uppercase tracking-[0.4em] mb-4">
              <div className="flex gap-1">
-                <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse"></div>
+                <div className="w-1 h-1 bg-blue-600 rounded-full animate-pulse"></div>
                 <div className="w-1 h-1 bg-blue-400 rounded-full animate-pulse delay-75"></div>
-                <div className="w-1 h-1 bg-blue-300 rounded-full animate-pulse delay-150"></div>
+                <div className="w-1 h-1 bg-blue-200 rounded-full animate-pulse delay-150"></div>
              </div>
-             Curatorial Engine Calibrated
+             Curated for your profile
           </div>
           <h2 className="text-5xl font-serif font-bold italic tracking-tight mb-2">{title}</h2>
           <p className="text-gray-400 text-lg font-light leading-relaxed max-w-xl">{subtitle}</p>
         </div>
         <button className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-black flex items-center gap-2 group transition-all pb-2">
-          Sync Signal Loop <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+          Sync Interest Feed <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
         </button>
       </div>
 
@@ -46,11 +46,11 @@ export const IntelligenceRecommendationRail: React.FC<IntelligenceRecommendation
                   : 'bg-white text-blue-600 border-blue-50'
                }`}>
                  {rec.reason === 'explore' ? <Sparkles size={10} /> : <Target size={10} />}
-                 {rec.reason === 'explore' ? 'Aesthetic Drift' : `${rec.matchConfidence}% Match`}
+                 {rec.reason === 'explore' ? 'Trending' : `${rec.matchConfidence}% Match`}
                </div>
             </div>
             
-            <div className="transition-all duration-700 hover:-translate-y-3 hover:rotate-1">
+            <div className="transition-all duration-700 hover:-translate-y-3">
               <ArtworkCard 
                 artwork={rec.artwork} 
                 onClick={() => onSelect(rec.artwork)}
@@ -65,7 +65,7 @@ export const IntelligenceRecommendationRail: React.FC<IntelligenceRecommendation
                </p>
                <div className="mt-4 flex items-center justify-between">
                   <div className="flex items-center gap-2 text-[8px] font-bold uppercase tracking-widest text-gray-300">
-                     <Activity size={8} className="text-blue-400" /> Interaction Informed
+                     <Activity size={8} className="text-blue-400" /> Style Interaction Sync
                   </div>
                   <span className="text-[8px] font-mono text-gray-400 uppercase">#{rec.artwork.style}</span>
                </div>
@@ -76,8 +76,8 @@ export const IntelligenceRecommendationRail: React.FC<IntelligenceRecommendation
              <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-6">
                 <Zap size={24} className="text-gray-200" />
              </div>
-             <p className="text-2xl font-serif italic text-gray-200 mb-2">Awaiting Signals.</p>
-             <p className="text-xs text-gray-400 font-light max-w-xs">Browse the spectrum to calibrate your personalized intelligence feed.</p>
+             <p className="text-2xl font-serif italic text-gray-200 mb-2">Finding Aligned Works...</p>
+             <p className="text-xs text-gray-400 font-light max-w-xs">Browse more to help the curator calibrate your matches.</p>
           </div>
         )}
       </div>
