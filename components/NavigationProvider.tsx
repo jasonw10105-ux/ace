@@ -22,16 +22,21 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({
 }) => {
   const location = useLocation()
   
+  // Routes where we should show the Public Header even if a partial session exists
   const isPublicRoute = location.pathname === '/' || 
+                       location.pathname === '/auth' ||
                        location.pathname.startsWith('/artworks') ||
                        location.pathname.startsWith('/artists') ||
                        location.pathname.startsWith('/catalogues') ||
                        location.pathname.startsWith('/community') ||
                        location.pathname.startsWith('/search')
 
+  // Only show the private Header if the user is logged in AND their profile is complete
+  const showPrivateHeader = user && user.profile_complete && !isPublicRoute;
+
   return (
     <>
-      {user && !isPublicRoute ? (
+      {showPrivateHeader ? (
         <Header 
           user={user} 
           onSearchClick={onSearchClick} 
@@ -45,7 +50,7 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({
       <div className="pt-20">
         {children}
       </div>
-      {user && <AmbientAdvisor />}
+      {user && user.profile_complete && <AmbientAdvisor />}
     </>
   )
 }

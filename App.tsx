@@ -81,21 +81,21 @@ const AppContent: React.FC<{
         const { data: arts } = await supabase.from('artworks').select('*').eq('user_id', userId);
         setUserArtworks(arts || []);
       } else {
-        // Authenticated but no complete profile - force Identity Setup
+        // Authenticated but identity registry is incomplete. Reroute to setup.
         if (location.pathname !== '/auth') navigate('/auth');
       }
     } catch (e) {
-      logger.error('Profile sync failed', e as Error);
+      logger.error('Identity registry sync interrupt', e as Error);
     }
   }, [setUser, navigate, location.pathname]);
 
   useEffect(() => {
-    // Initial check
+    // Initial identity check
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) fetchProfile(session.user.id);
     });
 
-    // Listen for Auth signals (including Magic Link hash returns)
+    // Neural listener for Auth signals (handles Magic Link return fragments)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
         fetchProfile(session.user.id);
@@ -107,7 +107,7 @@ const AppContent: React.FC<{
     });
 
     return () => subscription.unsubscribe();
-  }, [fetchProfile, navigate]);
+  }, [fetchProfile, navigate, setUser]);
 
   const handleAuthComplete = (role: UserRole, isNew: boolean) => {
     if ((role === 'COLLECTOR' || role === 'BOTH') && isNew) navigate('/onboarding');
@@ -146,7 +146,7 @@ const AppContent: React.FC<{
             )}
 
             <Routes>
-              <Route path="/" element={user ? <HomePage /> : <WaitlistPage />} />
+              <Route path="/" element={user && user.profile_complete ? <HomePage /> : <WaitlistPage />} />
               <Route path="/artworks" element={<ArtworksPage />} />
               <Route path="/artists" element={<ArtistsPage />} />
               <Route path="/artist/:id" element={<ArtistProfile />} />
@@ -154,28 +154,27 @@ const AppContent: React.FC<{
               <Route path="/community" element={<CommunityPage user={user} />} />
               <Route path="/search" element={<SearchResultsPage />} />
               
-              <Route path="/explore" element={user ? <IntelligentExplorePage user={user} /> : <Navigate to="/auth" />} />
+              <Route path="/explore" element={user && user.profile_complete ? <IntelligentExplorePage user={user} /> : <Navigate to="/auth" />} />
               <Route path="/waitlist" element={<WaitlistPage />} />
               <Route path="/auth" element={<AuthFlow onComplete={handleAuthComplete} onBackToHome={() => navigate('/')} />} />
               <Route path="/recovery" element={<RecoveryFlow onBack={() => navigate('/auth')} onComplete={() => navigate('/dashboard')} />} />
               
-              <Route path="/dashboard" element={user ? <Dashboard user={user} onAction={() => navigate('/artworks')} /> : <Navigate to="/auth" />} />
-              <Route path="/roadmap" element={user ? <CollectionRoadmapPage onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-              <Route path="/favorites" element={user ? <FavoritesPage onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-              <Route path="/calendar" element={user ? <Calendar onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-              <Route path="/registry" element={user ? <StudioRegistry onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-              <Route path="/vault" element={user ? (vaultVerified ? <CollectorVault onBack={() => navigate('/dashboard')} /> : <VaultAccess email={user.email} onVerified={() => setVaultVerified(true)} onCancel={() => navigate('/dashboard')} />) : <Navigate to="/auth" />} />
-              <Route path="/settings" element={user ? <EnhancedCollectorSettings user={user} onSave={(u) => setUser({...user, ...u})} onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-              <Route path="/sales" element={user ? <Sales user={user} artworks={userArtworks} onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-              <Route path="/crm" element={user ? <ArtistCRM onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-              <Route path="/market-intelligence" element={user ? <ArtistMarketIntelligence onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-              <Route path="/signals" element={user ? <NotificationsPage /> : <Navigate to="/auth" />} />
-              <Route path="/workspace" element={user ? <ProjectWorkspace onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-              <Route path="/audit" element={user ? <CollectionAudit onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-              <Route path="/press-pack" element={user ? <ArtistPressPack artworks={userArtworks} onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
-              <Route path="/advisor" element={user ? <LiveArtAdvisor onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+              <Route path="/dashboard" element={user && user.profile_complete ? <Dashboard user={user} onAction={() => navigate('/artworks')} /> : <Navigate to="/auth" />} />
+              <Route path="/roadmap" element={user && user.profile_complete ? <CollectionRoadmapPage onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+              <Route path="/favorites" element={user && user.profile_complete ? <FavoritesPage onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+              <Route path="/calendar" element={user && user.profile_complete ? <Calendar onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+              <Route path="/registry" element={user && user.profile_complete ? <StudioRegistry onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+              <Route path="/vault" element={user && user.profile_complete ? (vaultVerified ? <CollectorVault onBack={() => navigate('/dashboard')} /> : <VaultAccess email={user.email} onVerified={() => setVaultVerified(true)} onCancel={() => navigate('/dashboard')} />) : <Navigate to="/auth" />} />
+              <Route path="/settings" element={user && user.profile_complete ? <EnhancedCollectorSettings user={user} onSave={(u) => setUser({...user, ...u})} onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+              <Route path="/sales" element={user && user.profile_complete ? <Sales user={user} artworks={userArtworks} onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+              <Route path="/crm" element={user && user.profile_complete ? <ArtistCRM onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+              <Route path="/market-intelligence" element={user && user.profile_complete ? <ArtistMarketIntelligence onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+              <Route path="/signals" element={user && user.profile_complete ? <NotificationsPage /> : <Navigate to="/auth" />} />
+              <Route path="/workspace" element={user && user.profile_complete ? <ProjectWorkspace onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+              <Route path="/audit" element={user && user.profile_complete ? <CollectionAudit onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+              <Route path="/press-pack" element={user && user.profile_complete ? <ArtistPressPack artworks={userArtworks} onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+              <Route path="/advisor" element={user && user.profile_complete ? <LiveArtAdvisor onBack={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
               
-              {/* Identity Centric Public Routes */}
               <Route path="/:username/artwork/:slug" element={<ArtworkDetail />} />
               <Route path="/:username/catalogue/:slug" element={<CatalogueDetail />} />
 
@@ -188,7 +187,7 @@ const AppContent: React.FC<{
 
         {isImmersive && (
            <Routes>
-              <Route path="/onboarding" element={user ? <TasteOnboarding artworks={MOCK_ARTWORKS.slice(0, 10)} onComplete={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
+              <Route path="/onboarding" element={user && user.profile_complete ? <TasteOnboarding artworks={MOCK_ARTWORKS.slice(0, 10)} onComplete={() => navigate('/dashboard')} /> : <Navigate to="/auth" />} />
               <Route path="/catalogue/:id" element={<CatalogueDetail />} />
               <Route path="/:username/catalogue/:slug" element={<CatalogueDetail />} />
               <Route path="/viewing-room/:id" element={<CatalogueDetail />} />

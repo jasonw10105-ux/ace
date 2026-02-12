@@ -7,7 +7,6 @@ import { RoomVisualizer } from './RoomVisualizer';
 import { CheckoutModal } from './CheckoutModal';
 import { learningLoops } from '../services/learningLoops';
 import { geminiService } from '../services/geminiService';
-import { MOCK_ARTWORKS } from '../constants';
 import toast from 'react-hot-toast';
 import { 
   Heart, Share2, MessageSquare, ArrowLeft, 
@@ -32,7 +31,6 @@ const ArtworkDetail: React.FC = () => {
     const fetchArt = async () => {
       setLoading(true);
       try {
-        // Resolve artwork via username and slug join
         const { data, error } = await supabase
           .from('artworks')
           .select('*, profiles!user_id(username, full_name, display_name)')
@@ -41,21 +39,14 @@ const ArtworkDetail: React.FC = () => {
           .single();
 
         if (error || !data) {
-          // Fallback to mock logic if identity resolution fails in this environment
-          const mockArt = MOCK_ARTWORKS.find(a => a.slug === slug);
-          if (mockArt) setArtwork(mockArt);
-          else throw new Error("Asset not found");
-        } else {
-          setArtwork(data as any);
+          throw new Error("Asset identity mismatch or missing record.");
         }
-
-        const currentArt = data || MOCK_ARTWORKS.find(a => a.slug === slug);
-        if (currentArt) {
-          const insightRes = await geminiService.generateRecommendationNarrative(currentArt as any, { mission: 'contemporary discovery' });
-          setCuratorialInsight(insightRes);
-        }
+        
+        setArtwork(data as any);
+        const insightRes = await geminiService.generateRecommendationNarrative(data as any, { mission: 'contemporary discovery' });
+        setCuratorialInsight(insightRes);
       } catch (err: any) {
-        toast.error('Unable to resolve asset identity.');
+        console.error(err);
       } finally {
         setLoading(false);
         setIsAnalyzing(false);
@@ -65,18 +56,6 @@ const ArtworkDetail: React.FC = () => {
     if (slug && username) fetchArt();
   }, [slug, username]);
 
-  const recordSignal = (type: 'save' | 'purchase' | 'inquiry') => {
-    if (!user || !artwork) return;
-    learningLoops.recordSignal({
-      userId: user.id,
-      signalType: type === 'save' ? 'like' : type,
-      entityType: 'artwork',
-      entityId: artwork.id,
-      timestamp: new Date().toISOString()
-    });
-    if (type !== 'purchase') toast.success(`Saved to Curations`);
-  };
-
   if (loading) return (
     <div className="fixed inset-0 bg-white z-[200] flex items-center justify-center">
       <Loader2 className="animate-spin text-black" size={48} />
@@ -85,37 +64,25 @@ const ArtworkDetail: React.FC = () => {
 
   if (!artwork) return (
     <div className="fixed inset-0 bg-white z-[200] flex flex-col items-center justify-center p-6 text-center">
-      <h1 className="text-4xl font-serif font-bold italic mb-4">Artwork not found.</h1>
-      <button onClick={() => navigate('/artworks')} className="px-12 py-5 bg-black text-white rounded-2xl font-bold text-xs uppercase tracking-widest">Back to Feed</button>
+      <Compass size={48} className="text-gray-100 mb-6" />
+      <h1 className="text-4xl font-serif font-bold italic mb-4">Asset not found.</h1>
+      <p className="text-gray-400 mb-8 max-w-xs mx-auto">This artwork record does not exist in the Frontier Registry.</p>
+      <button onClick={() => navigate('/artworks')} className="px-12 py-5 bg-black text-white rounded-2xl font-bold text-xs uppercase tracking-widest">Return to Inventory</button>
     </div>
   );
 
   return (
     <div className="min-h-screen bg-white animate-in fade-in duration-700 pb-40">
-      {showVisualizer && (
-        <RoomVisualizer artwork={artwork} onClose={() => setShowVisualizer(false)} />
-      )}
-
-      {showCheckout && user && (
-        <CheckoutModal 
-          artwork={artwork} 
-          user={user} 
-          onClose={() => setShowCheckout(false)} 
-          onSuccess={() => navigate('/vault')}
-        />
-      )}
+      {showVisualizer && <RoomVisualizer artwork={artwork} onClose={() => setShowVisualizer(false)} />}
+      {showCheckout && user && <CheckoutModal artwork={artwork} user={user} onClose={() => setShowCheckout(false)} onSuccess={() => navigate('/vault')} />}
 
       <div className="max-w-7xl mx-auto px-6 pt-32 pb-8 border-b border-gray-100 mb-12 flex items-center justify-between">
         <button onClick={() => navigate(-1)} className="group flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-black transition-colors">
           <ArrowLeft size={16} className="group-hover:-translate-x-1" /> Back
         </button>
         <div className="flex gap-4">
-           <button onClick={() => recordSignal('save')} className="p-3 bg-gray-50 rounded-xl hover:text-red-500 transition-all">
-             <Heart size={18} />
-           </button>
-           <button className="p-3 bg-gray-50 rounded-xl hover:text-blue-500 transition-all">
-             <Share2 size={18} />
-           </button>
+           <button onClick={() => {}} className="p-3 bg-gray-50 rounded-xl hover:text-red-500 transition-all"><Heart size={18} /></button>
+           <button className="p-3 bg-gray-50 rounded-xl hover:text-blue-500 transition-all"><Share2 size={18} /></button>
         </div>
       </div>
 
@@ -167,7 +134,7 @@ const ArtworkDetail: React.FC = () => {
                     <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-blue-400">Price</p>
                     <span className="text-5xl font-mono font-bold">${Number(artwork.price).toLocaleString()}</span>
                  </div>
-                 <button onClick={() => { recordSignal('purchase'); setShowCheckout(true); }} className="w-full bg-white text-black py-7 rounded-2xl font-bold text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl flex items-center justify-center gap-4">
+                 <button onClick={() => setShowCheckout(true)} className="w-full bg-white text-black py-7 rounded-2xl font-bold text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl flex items-center justify-center gap-4">
                    <ShieldCheck size={24} /> Buy This Work
                  </button>
               </div>

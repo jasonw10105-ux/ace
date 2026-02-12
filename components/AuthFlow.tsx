@@ -27,13 +27,13 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ onComplete, onBackToHome }) 
   const [resendCooldown, setResendCooldown] = useState(0);
   const [finalRole, setFinalRole] = useState<UserRole | null>(null);
 
-  // Identity Handshake: Check if user just arrived from a Magic Link
+  // Identity Discovery: Detect if user arrived via Magic Link
   useEffect(() => {
-    const handleRedirectSession = async () => {
+    const handleReturnHandshake = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session) {
-        // User is authenticated. Check if they have a profile yet.
+        // We have an active session. Now check the profile registry.
         const { data: profile, error } = await supabase
           .from('profiles')
           .select('role, profile_complete')
@@ -41,21 +41,21 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ onComplete, onBackToHome }) 
           .maybeSingle();
         
         if (error) {
-          logger.error('Profile discovery failed', error);
+          logger.error('Registry sync error', error);
           return;
         }
 
+        // If authenticated but profile is missing or incomplete, move to role selection
         if (!profile || !profile.profile_complete) {
-          // Authenticated but identity ledger incomplete. Route to Role Selection.
           setStep('role');
           setEmail(session.user.email || '');
         } else {
-          // Fully verified identity. Enter platform.
+          // Fully registered. Dispatch to dashboard.
           onComplete(profile.role, false);
         }
       }
     };
-    handleRedirectSession();
+    handleReturnHandshake();
   }, [onComplete]);
 
   useEffect(() => {
@@ -75,12 +75,12 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ onComplete, onBackToHome }) 
     }
 
     setIsLoading(true);
-    const loadingToast = toast.loading('Dispatching Magic Link...');
+    const loadingToast = toast.loading('Dispatching Access Signal...');
 
     try {
-      // Construction of the return path. 
-      // Ensure this URL is whitelisted in your Supabase Auth settings.
-      const redirectUrl = window.location.origin.replace(/\/$/, '') + '/auth';
+      // DYNAMIC ORIGIN: Uses the current environment URL.
+      // IMPORTANT: You must add this URL to "Redirect URLs" in Supabase Auth Settings.
+      const redirectUrl = window.location.origin + '/auth';
       
       const { error } = await supabase.auth.signInWithOtp({ 
         email: validation.normalizedEmail,
@@ -92,12 +92,16 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ onComplete, onBackToHome }) 
 
       if (error) throw error;
 
-      logger.authEvent('MAGIC_LINK_DISPATCHED', undefined, { email: validation.normalizedEmail, redirect: redirectUrl });
-      toast.success('Signal sent. Check your inbox.', { id: loadingToast });
+      logger.authEvent('MAGIC_LINK_DISPATCHED', undefined, { 
+        email: validation.normalizedEmail, 
+        origin: redirectUrl 
+      });
+      
+      toast.success('Signal sent. Verify via your email client.', { id: loadingToast });
       setStep('await-link');
       setResendCooldown(60);
     } catch (error: any) {
-      logger.error('Auth Signal Interrupt', error);
+      logger.error('Signal Dispatch Failed', error);
       toast.error(error.message || 'Signal Dispatch Failed', { id: loadingToast });
     } finally {
       setIsLoading(false);
@@ -106,11 +110,11 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ onComplete, onBackToHome }) 
 
   const handleRoleSelection = async (selectedRole: UserRole) => {
     setIsLoading(true);
-    const loadingToast = toast.loading('Synchronizing Profile Ledger...');
+    const loadingToast = toast.loading('Establishing Identity Node...');
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Active session required for identity establishment.');
+      if (!user) throw new Error('Active session required for identity sync.');
 
       const { error } = await supabase.from('profiles').upsert({
         id: user.id,
@@ -125,12 +129,12 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ onComplete, onBackToHome }) 
       if (error) throw error;
 
       setFinalRole(selectedRole);
-      logger.authEvent('ROLE_ESTABLISHED', user.id, { role: selectedRole });
+      logger.authEvent('IDENTITY_LOCKED', user.id, { role: selectedRole });
       toast.success(`Identity established: ${selectedRole}`, { id: loadingToast });
       setStep('success');
     } catch (error: any) {
-      logger.error('Identity Write Failed', error);
-      toast.error(error.message || 'Identity Write Failed', { id: loadingToast });
+      logger.error('Identity established failure', error);
+      toast.error(error.message || 'Identity established failure', { id: loadingToast });
     } finally {
       setIsLoading(false);
     }
@@ -154,7 +158,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ onComplete, onBackToHome }) 
                 <Globe size={40} className="animate-pulse" />
               </div>
               <h1 className="text-6xl font-serif font-bold italic tracking-tight mb-4 leading-none">ArtFlow.</h1>
-              <p className="text-gray-400 font-light text-lg">Enter your identifier to receive an <br/><span className="text-black font-medium italic">Access Signal</span>.</p>
+              <p className="text-gray-400 font-light text-lg">Access your private studio ledger.</p>
             </div>
 
             <form onSubmit={handleInitialSubmit} className="space-y-6">
@@ -168,14 +172,14 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ onComplete, onBackToHome }) 
                 />
               </div>
               <button disabled={isLoading || !email} className="w-full bg-black text-white py-6 rounded-[1.5rem] font-bold uppercase tracking-widest hover:scale-[1.02] transition-all flex items-center justify-center gap-3 disabled:opacity-30 shadow-xl shadow-black/10">
-                {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Request Magic Link'}
+                {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Dispatch Magic Link'}
                 <Send size={18} />
               </button>
             </form>
 
             <div className="text-center">
                <button className="flex items-center gap-2 mx-auto text-[10px] font-black uppercase tracking-[0.3em] text-gray-300 hover:text-black transition-all">
-                  <Terminal size={12} /> External Identity Providers
+                  <Terminal size={12} /> Institutional SSO
                </button>
             </div>
           </div>
@@ -190,16 +194,16 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ onComplete, onBackToHome }) 
                    <Inbox size={48} className="animate-bounce" />
                  </div>
                </div>
-               <h1 className="text-5xl font-serif font-bold italic tracking-tight mb-4 leading-none">Check Inbox.</h1>
+               <h1 className="text-5xl font-serif font-bold italic tracking-tight mb-4 leading-none">Signal Sent.</h1>
                <p className="text-gray-400 font-light text-lg">
-                 We've sent a secure access signal to <br/>
+                 Check your inbox at <br/>
                  <span className="text-black font-medium">{email}</span>.
                </p>
             </div>
 
             <div className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100 space-y-4">
                <p className="text-sm text-gray-500 leading-relaxed text-center italic">
-                 Click the link in the email to verify your identity. This tab will automatically update.
+                 Click the verification link in the email. Once clicked, this tab will update automatically to your identity setup.
                </p>
                <Separator />
                <button 
@@ -222,13 +226,13 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ onComplete, onBackToHome }) 
                   <CheckCircle2 size={32} />
                </div>
                <h1 className="text-6xl font-serif font-bold italic tracking-tight mb-4 leading-none">Identify.</h1>
-               <p className="text-gray-400 font-light text-lg">Complete your identity sync on the Frontier.</p>
+               <p className="text-gray-400 font-light text-lg">Define your focus on the Frontier.</p>
             </div>
 
             <div className="space-y-4">
               {[
-                { id: 'ARTIST', label: 'Creator Studio', desc: 'Registry management and collector intelligence.', icon: <Palette className="text-blue-500" /> },
-                { id: 'COLLECTOR', label: 'Intentional Collector', desc: 'Vault management and neural discovery.', icon: <User className="text-indigo-500" /> }
+                { id: 'ARTIST', label: 'Creator Studio', desc: 'Manage your portfolio, commercial intelligence, and collector loops.', icon: <Palette className="text-blue-500" /> },
+                { id: 'COLLECTOR', label: 'Intentional Collector', desc: 'Secure private assets and discover art via neural guidance.', icon: <User className="text-indigo-500" /> }
               ].map((r) => (
                 <button 
                   key={r.id} disabled={isLoading}
@@ -253,10 +257,10 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ onComplete, onBackToHome }) 
                <CheckCircle2 size={56} />
             </div>
             <div>
-              <h1 className="text-6xl font-serif font-bold italic tracking-tighter mb-4 leading-none">Locked.</h1>
-              <p className="text-gray-400 font-light max-w-xs mx-auto leading-relaxed text-lg">Identity ledger synchronized.</p>
+              <h1 className="text-6xl font-serif font-bold italic tracking-tighter mb-4 leading-none">Verified.</h1>
+              <p className="text-gray-400 font-light max-w-xs mx-auto leading-relaxed text-lg">Identity node established.</p>
             </div>
-            <button onClick={() => onComplete(finalRole!, true)} className="w-full bg-black text-white py-6 rounded-[1.5rem] font-bold uppercase tracking-widest hover:scale-[1.02] transition-all shadow-xl flex items-center justify-center gap-3">
+            <button onClick={() => onComplete(finalRole!, true)} className="w-full bg-black text-white py-6 rounded-[1.5rem] font-bold uppercase tracking-widest hover:scale-[1.02] transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-3">
               Enter Platform <Zap size={18} />
             </button>
           </div>
@@ -265,7 +269,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ onComplete, onBackToHome }) 
         <div className="p-6 bg-gray-50 rounded-[2rem] border border-gray-100 mt-12">
            <Flex align="center" gap={3}>
               <ShieldCheck size={18} className="text-blue-500" />
-              <Text variant="label" size={8} color="#999">End-to-End Encryption Protocol 8.4</Text>
+              <Text variant="label" size={8} color="#999">Protocol 8.4 Identity Secured</Text>
            </Flex>
         </div>
       </div>

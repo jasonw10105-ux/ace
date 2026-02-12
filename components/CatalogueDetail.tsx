@@ -18,19 +18,18 @@ export const CatalogueDetail: React.FC = () => {
   const navigate = useNavigate();
   const [activeArtId, setActiveArtId] = useState<string | null>(null);
   const [aiNarrative, setAiNarrative] = useState<string>("Scanning canvas signals...");
-  const [isSynthesizing, setIsSynthesizing] = useState(false);
-  const [rarityFilter, setRarityFilter] = useState<EditionType | 'all'>('all');
   
   const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const { data: catalogue, isLoading, isError } = useQuery({
     queryKey: ['catalogue-canvas', username, slug],
+    enabled: !!username && !!slug, // Guard against undefined params
     queryFn: async () => {
       const { data, error } = await supabase
         .from('catalogues')
         .select(`
           *, 
-          profiles!user_id (username, full_name, bio, location, avatar_url), 
+          profiles!inner!user_id (username, full_name, bio, location, avatar_url), 
           items:catalogue_items(*)
         `)
         .eq('slug', slug)
@@ -41,18 +40,13 @@ export const CatalogueDetail: React.FC = () => {
       const sortedItems = (data.items || []).sort((a: any, b: any) => a.order - b.order);
       return { ...data, items: sortedItems } as unknown as Catalogue;
     },
-    retry: false
+    retry: 1
   });
 
   const filteredItems = useMemo(() => {
     if (!catalogue) return [];
-    return catalogue.items.filter(item => {
-      if (item.type !== 'artwork') return true;
-      const art = item.content;
-      const matchesRarity = rarityFilter === 'all' || (art as any).edition_type === rarityFilter;
-      return art?.status === 'available' && matchesRarity;
-    });
-  }, [catalogue, rarityFilter]);
+    return catalogue.items;
+  }, [catalogue]);
 
   useEffect(() => {
     if (!catalogue) return;
@@ -72,8 +66,16 @@ export const CatalogueDetail: React.FC = () => {
   const user = userStr ? JSON.parse(userStr) : null;
   useNeuralSignals({ artworkId: activeArtId || '', userId: user?.id });
 
-  if (isLoading) return <Flex height="100vh" align="center" justify="center" bg="black"><Loader2 className="animate-spin text-blue-500" size={48}/></Flex>;
-  if (isError || !catalogue) return <Flex height="100vh" align="center" justify="center" bg="white" direction="column"><AlertCircle size={48} className="text-red-500 mb-6" /><h1 className="text-4xl font-serif font-bold italic mb-4">Exhibition not found.</h1><Button onClick={() => navigate('/catalogues')}>Return</Button></Flex>;
+  if (isLoading) return <Flex height="100vh" align="center" justify="center" bg="white"><Loader2 className="animate-spin text-blue-500" size={48}/></Flex>;
+  
+  if (isError || !catalogue) return (
+    <Flex height="100vh" align="center" justify="center" bg="white" direction="column">
+      <AlertCircle size={48} className="text-red-500 mb-6" />
+      <h1 className="text-4xl font-serif font-bold italic mb-4">Exhibition not found.</h1>
+      <Text color="#999" mb={8}>The neural link to this curation was severed or doesn't exist.</Text>
+      <Button onClick={() => navigate('/catalogues')}>Return to Index</Button>
+    </Flex>
+  );
 
   return (
     <div className="min-h-screen animate-in fade-in duration-1000 pb-80" style={{ backgroundColor: catalogue.branding?.secondaryColor || '#F8F8F8' }}>

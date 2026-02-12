@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-import { Search, Loader2, ArrowRight, BookOpen, Layers } from 'lucide-react';
+import { Search, Loader2, ArrowRight, BookOpen, Layers, Inbox } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Flex, Text, Grid, Button } from '../flow';
 
@@ -13,56 +13,19 @@ const BrowseCataloguesPage: React.FC = () => {
   const { data: catalogues, isLoading } = useQuery({
     queryKey: ['public-catalogues'],
     queryFn: async () => {
-      try {
-        const { data, error } = await supabase
-          .from('catalogues')
-          .select(`
-            *,
-            profiles:user_id (full_name, avatar_url, slug),
-            items:catalogue_items(*)
-          `)
-          .eq('is_published', true)
-          .eq('isPublic', true)
-          .order('created_at', { ascending: false });
+      const { data, error } = await supabase
+        .from('catalogues')
+        .select(`
+          *,
+          profiles!user_id (full_name, avatar_url, username),
+          items:catalogue_items(*)
+        `)
+        .eq('is_published', true)
+        .eq('is_public', true)
+        .order('created_at', { ascending: false });
 
-        if (error || !data || data.length === 0) throw new Error("Fallback required");
-        
-        return data.filter((cat: any) => {
-          const artworks = cat.items?.filter((i: any) => i.type === 'artwork');
-          return artworks && artworks.length > 0;
-        });
-      } catch (e) {
-        // MOCK FALLBACK for demo resilience
-        return [
-          {
-            id: 'mock-cat-1',
-            title: 'The Brutalist Dialogue',
-            description: 'Investigating the friction between concrete forms and digital synthesis.',
-            cover_image_url: 'https://picsum.photos/seed/brutalist/1200/800',
-            user_id: 'user-1',
-            profiles: { full_name: 'Elena Vance' },
-            items: [{ type: 'artwork', content: { status: 'available' } }]
-          },
-          {
-            id: 'mock-cat-2',
-            title: 'Chromesthesia v.2',
-            description: 'A study of atmospheric weight and color-field interactions.',
-            cover_image_url: 'https://picsum.photos/seed/color/1200/800',
-            user_id: 'user-2',
-            profiles: { full_name: 'Kenji Sato' },
-            items: [{ type: 'artwork', content: { status: 'available' } }]
-          },
-          {
-            id: 'mock-cat-3',
-            title: 'Digital Rust: Origins',
-            description: 'An exploration of entropy in the virtual spectrum.',
-            cover_image_url: 'https://picsum.photos/seed/rust/1200/800',
-            user_id: 'user-3',
-            profiles: { full_name: 'Julian Rossi' },
-            items: [{ type: 'artwork', content: { status: 'available' } }]
-          }
-        ];
-      }
+      if (error) throw error;
+      return data || [];
     }
   });
 
@@ -81,7 +44,7 @@ const BrowseCataloguesPage: React.FC = () => {
             </div>
             <h1 className="text-8xl font-serif font-bold italic tracking-tighter leading-[0.8] mb-6">Catalogues.</h1>
             <p className="text-gray-400 text-2xl font-light leading-relaxed">
-              Active exhibitions with <span className="text-black font-medium">available works</span> from leading Frontier Studios.
+              Active exhibitions from the <span className="text-black font-medium">Frontier Network</span>.
             </p>
           </Box>
 
@@ -104,12 +67,12 @@ const BrowseCataloguesPage: React.FC = () => {
             <Loader2 className="animate-spin text-black" size={40} />
             <Text variant="label" color="#707070">Scanning Active Signals...</Text>
           </Flex>
-        ) : (
+        ) : filtered && filtered.length > 0 ? (
           <Grid cols="1 md:2" gap={12}>
-            {filtered?.map((cat) => (
+            {filtered.map((cat) => (
               <div 
                 key={cat.id} 
-                onClick={() => navigate(`/catalogue/${cat.slug || cat.id}`)}
+                onClick={() => navigate(`/${cat.profiles?.username}/catalogue/${cat.slug}`)}
                 className="group cursor-pointer flex flex-col"
               >
                 <Box position="relative" overflow="hidden" bg="#F3F3F3" mb={8} className="aspect-[16/10]">
@@ -128,13 +91,13 @@ const BrowseCataloguesPage: React.FC = () => {
                 <Box className="space-y-4 pr-12">
                    <Text variant="h2" weight="bold" className="block text-4xl hover:text-blue-700 transition-colors">{cat.title}</Text>
                    <Text color="#707070" weight="light" className="text-lg leading-relaxed line-clamp-3 mb-8 block font-serif italic">
-                     "{cat.description || 'An exploration of visual tension and materiality.'}"
+                     "{cat.description || 'An exploration of visual identity.'}"
                    </Text>
                    
                    <Flex justify="between" align="center" pt={8} borderTop="1px solid #F3F3F3">
                       <Flex align="center" gap={3}>
                          <Box width="32px" height="32px" bg="#000" overflow="hidden" borderRadius="full">
-                            <img src={cat.profiles?.avatar_url || `https://picsum.photos/seed/${cat.user_id || 'u'}/100`} alt="Studio" />
+                            <img src={cat.profiles?.avatar_url || `https://picsum.photos/seed/${cat.user_id}/100`} alt="Studio" />
                          </Box>
                          <Text variant="label" size={10} color="#707070">{cat.profiles?.full_name || 'Verified Studio'}</Text>
                       </Flex>
@@ -147,13 +110,12 @@ const BrowseCataloguesPage: React.FC = () => {
               </div>
             ))}
           </Grid>
-        )}
-
-        {(!isLoading && filtered?.length === 0) && (
-           <Box py={40} textAlign="center" border="1px dashed #E5E5E5">
-              <Text variant="h2" italic color="#CCC">No active catalogues found.</Text>
-              <Button mt={8} onClick={() => setSearchQuery('')}>Clear Search</Button>
-           </Box>
+        ) : (
+          <Flex height="400px" align="center" justify="center" direction="column" className="text-center border-2 border-dashed border-gray-100 rounded-[4rem] p-20">
+             <Inbox size={64} className="text-gray-100 mb-8" />
+             <Text variant="h2" color="#DDD" italic className="text-4xl">No Catalogues Published.</Text>
+             <Text size={16} color="#999" mt={4} className="max-w-xs leading-relaxed">The collective ledger is currently awaiting new curatorial releases.</Text>
+          </Flex>
         )}
       </Box>
     </div>
